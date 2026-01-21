@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
+
 #include <Utils/StringUtils.hpp>
 
 #include "../Render/CommandList.hpp"
@@ -46,6 +48,7 @@ void debugMessageCallbackD3D12(
 
 Device::Device(const ComPtr<IDXGIAdapter1> &dxgiAdapter1, D3D_FEATURE_LEVEL featureLevel, bool useDebugLayer)
         : dxgiAdapter1(dxgiAdapter1), featureLevel(featureLevel), useDebugLayer(useDebugLayer) {
+    std::cerr << "ENTER: Device::Device(const ComPtr<IDXGIAdapter1> &, D3D_FEATURE_LEVEL, bool\n";
     commandListsSingleTime.resize(int(CommandListType::MAX_VAL), {});
     ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
     ThrowIfFailed(D3D12CreateDevice(dxgiAdapter4.Get(), featureLevel, IID_PPV_ARGS(&d3d12Device2)));
@@ -97,6 +100,7 @@ Device::Device(const ComPtr<IDXGIAdapter1> &dxgiAdapter1, D3D_FEATURE_LEVEL feat
     if (!FAILED(d3d12Device2->CreateCommandQueue(&commandQueueDesc, IID_PPV_ARGS(&commandQueueCompute)))) {
         supportsComputeQueue = true;
     }
+    std::cerr << "LEAVE: Device::Device(const ComPtr<IDXGIAdapter1> &, D3D_FEATURE_LEVEL, bool\n";
 }
 
 Device::~Device() {
