@@ -41,6 +41,9 @@ enum class DeviceVendor {
     NVIDIA, AMD, INTEL, UNKNOWN
 };
 
+std::string deviceVendor(DeviceVendor vendor);
+std::string featureLevel(D3D_FEATURE_LEVEL level);
+
 class CommandList;
 typedef std::shared_ptr<CommandList> CommandListPtr;
 
@@ -67,7 +70,7 @@ public:
             D3D12_MESSAGE_ID ID,
             LPCSTR pDescription);
 
-    void runSingleTimeCommands(
+    void runOnce(
             const std::function<void(CommandList*)>& workFunctor,
             CommandListType commandListType = CommandListType::DIRECT);
 

@@ -26,6 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream> // for std::cout, cerr
+#include <format>   // for std::format
+
 #include "../Render/CommandList.hpp"
 #include "Device.hpp"
 #include "Resource.hpp"
@@ -34,6 +37,28 @@
 
 namespace sgl { namespace d3d12 {
 
+//----------------------------------------------------------------------------//
+uint32_t getDimensions(D3D12_RESOURCE_DIMENSION dim) {
+    switch (dim) {
+        case D3D12_RESOURCE_DIMENSION_UNKNOWN  : return 0;
+        case D3D12_RESOURCE_DIMENSION_BUFFER   : return 1;
+        case D3D12_RESOURCE_DIMENSION_TEXTURE1D: return 1;
+        case D3D12_RESOURCE_DIMENSION_TEXTURE2D: return 2;
+        case D3D12_RESOURCE_DIMENSION_TEXTURE3D: return 3;
+    }
+    return 0;
+}
+//----------------------------------------------------------------------------//
+std::string getTextureLayout(D3D12_TEXTURE_LAYOUT layout) {
+    switch (layout) {
+        case D3D12_TEXTURE_LAYOUT_UNKNOWN               : return std::string("Unknown");
+        case D3D12_TEXTURE_LAYOUT_ROW_MAJOR             : return std::string("Row Major");
+        case D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE: return std::string("64KB Tiled (Undefined Swizzle)");
+        case D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE : return std::string("64KB Tiled (Standard Swizzle)");
+    }
+    return std::string("Unspecified");
+}
+//----------------------------------------------------------------------------//
 size_t getDXGIFormatNumChannels(DXGI_FORMAT format) {
     switch (format) {
         case DXGI_FORMAT_R8_UNORM:
@@ -88,15 +113,15 @@ size_t getDXGIFormatNumChannels(DXGI_FORMAT format) {
             return 0;
     }
 }
-
+//----------------------------------------------------------------------------//
 size_t getDXGIFormatSizeInBytes(DXGI_FORMAT format) {
     switch (format) {
         case DXGI_FORMAT_R8_UNORM:
         case DXGI_FORMAT_R8_SNORM:
         case DXGI_FORMAT_R8_UINT:
         case DXGI_FORMAT_R8_SINT:
-        case DXGI_FORMAT_D16_UNORM:
             return 1;
+        case DXGI_FORMAT_D16_UNORM:
         case DXGI_FORMAT_R16_UNORM:
         case DXGI_FORMAT_R16_SNORM:
         case DXGI_FORMAT_R16_UINT:
@@ -145,10 +170,13 @@ size_t getDXGIFormatSizeInBytes(DXGI_FORMAT format) {
             return 0;
     }
 }
+//----------------------------------------------------------------------------//
 
+//-==========================================================================-//
 Resource::Resource(Device* device, const ResourceSettings& resourceSettings)
         : device(device), resourceSettings(resourceSettings) {
 
+    std::cerr << "ENTER: Resource::Resource(Device*, const ResourceSettings&)\n";
     auto* d3d12Device = device->getD3D12Device2();
     D3D12_CLEAR_VALUE clearValue{};
     const D3D12_CLEAR_VALUE* optimizedClearValue = nullptr;
@@ -175,15 +203,15 @@ Resource::Resource(Device* device, const ResourceSettings& resourceSettings)
     }
     auto formatPlaneCount = uint32_t(D3D12GetFormatPlaneCount(d3d12Device, resourceSettings.resourceDesc.Format));
     numSubresources = uint32_t(resourceSettings.resourceDesc.MipLevels) * arraySize * formatPlaneCount;
+    std::cerr << "LEAVE: Resource::Resource(Device*, const ResourceSettings&)\n";
 }
-
+//----------------------------------------------------------------------------//
 Resource::~Resource() = default;
-
-
+//----------------------------------------------------------------------------//
 void* Resource::map() {
     return map(0, getCopiableSizeInBytes());
 }
-
+//----------------------------------------------------------------------------//
 void* Resource::map(size_t readRangeBegin, size_t readRangeEnd) {
     D3D12_RANGE readRange = { readRangeBegin, readRangeEnd };
     void* dataPtr = nullptr;
@@ -192,18 +220,19 @@ void* Resource::map(size_t readRangeBegin, size_t readRangeEnd) {
     }
     return dataPtr;
 }
-
+//----------------------------------------------------------------------------//
 void Resource::unmap() {
     D3D12_RANGE writtenRange = { 0, 0 };
     resource->Unmap(0, &writtenRange);
 }
-
+//----------------------------------------------------------------------------//
 void Resource::unmap(size_t writtenRangeBegin, size_t writtenRangeEnd) {
     D3D12_RANGE writtenRange = { writtenRangeBegin, writtenRangeEnd };
     resource->Unmap(0, &writtenRange);
 }
-
+//----------------------------------------------------------------------------//
 void Resource::uploadDataLinear(size_t sizeInBytesData, const void* dataPtr) {
+    std::cerr << "ENTER: Resource::uploadDataLinear(size_t, const void*)\n";
     size_t intermediateSizeInBytes;
     if (resourceSettings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
         intermediateSizeInBytes = sizeInBytesData;
@@ -237,22 +266,24 @@ void Resource::uploadDataLinear(size_t sizeInBytesData, const void* dataPtr) {
             nullptr,
             IID_PPV_ARGS(&intermediateResource)));
 
-    device->runSingleTimeCommands([&](CommandList* commandList){
-        this->transition(D3D12_RESOURCE_STATE_COPY_DEST, commandList);
-        uploadDataLinearInternal(sizeInBytesData, dataPtr, intermediateResource.Get(), commandList);
+    device->runOnce([&](CommandList* cmdList){
+        this->transition(D3D12_RESOURCE_STATE_COPY_DEST, cmdList);
+        uploadDataLinearInternal(sizeInBytesData, dataPtr, intermediateResource.Get(), cmdList);
     });
+    std::cerr << "LEAVE: Resource::uploadDataLinear(size_t, const void*)\n";
 }
-
+//----------------------------------------------------------------------------//
 void Resource::uploadDataLinear(
         size_t sizeInBytesData, const void* dataPtr,
-        const ResourcePtr& intermediateResource, const CommandListPtr& commandList) {
-    uploadDataLinearInternal(sizeInBytesData, dataPtr, intermediateResource->getD3D12ResourcePtr(), commandList.get());
+        const ResourcePtr& intermediateResource, const CommandListPtr& cmdList) {
+    uploadDataLinearInternal(sizeInBytesData, dataPtr, intermediateResource->getD3D12ResourcePtr(), cmdList.get());
 }
-
+//----------------------------------------------------------------------------//
 void Resource::uploadDataLinearInternal(
         size_t sizeInBytesData, const void* dataPtr,
-        ID3D12Resource* intermediateResource, CommandList* commandList) {
-    auto* d3d12CommandList = commandList->getD3D12GraphicsCommandListPtr();
+        ID3D12Resource* intermediateResource, CommandList* cmdList) {
+    std::cerr << "ENTER: Resource::uploadDataLinearInternal(size_t, const void*, ID3D12Resource*, CommandList*)\n";
+    auto* d3d12CommandList = cmdList->getD3D12GraphicsCommandListPtr();
     D3D12_SUBRESOURCE_DATA subresourceData = {};
     subresourceData.pData = dataPtr;
     if (resourceSettings.resourceDesc.Height <= 1 && resourceSettings.resourceDesc.DepthOrArraySize <= 1) {
@@ -277,8 +308,9 @@ void Resource::uploadDataLinearInternal(
     UpdateSubresources(
             d3d12CommandList, getD3D12ResourcePtr(), intermediateResource, 0, 1,
             totalSize, &layout, &numRows, &rowSizeInBytes, &subresourceData);
+    std::cerr << "LEAVE: Resource::uploadDataLinearInternal(size_t, const void*, ID3D12Resource*, CommandList*)\n";
 }
-
+//----------------------------------------------------------------------------//
 void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
     if (numSubresources > 1) {
         sgl::Logfile::get()->throwError(
@@ -331,8 +363,8 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
             nullptr,
             IID_PPV_ARGS(&intermediateResource)));
 
-    device->runSingleTimeCommands([&](CommandList* commandList){
-        auto* d3d12CommandList = commandList->getD3D12GraphicsCommandListPtr();
+    device->runOnce([&](CommandList* cmdList){
+        auto* d3d12CommandList = cmdList->getD3D12GraphicsCommandListPtr();
         if (resourceSettings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
             d3d12CommandList->CopyBufferRegion(
                     intermediateResource.Get(), 0, resource.Get(), 0, sizeInBytesData);
@@ -346,7 +378,7 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
 
             const CD3DX12_TEXTURE_COPY_LOCATION Dst(intermediateResource.Get(), bufferFootprint);
             const CD3DX12_TEXTURE_COPY_LOCATION Src(resource.Get(), 0);
-            this->transition(D3D12_RESOURCE_STATE_COPY_SOURCE, commandList);
+            this->transition(D3D12_RESOURCE_STATE_COPY_SOURCE, cmdList);
             d3d12CommandList->CopyTextureRegion(&Dst, 0, 0, 0, &Src, nullptr);
         }
     });
@@ -386,38 +418,37 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
             resourceSettings.resourceDesc.DepthOrArraySize);
     intermediateResource->Unmap(0, &writtenRange);
 }
-
-
+//----------------------------------------------------------------------------//
 void Resource::transition(
-        D3D12_RESOURCE_STATES stateAfter, const CommandListPtr& commandList) {
-    transition(resourceSettings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, commandList);
+        D3D12_RESOURCE_STATES stateAfter, const CommandListPtr& cmdList) {
+    transition(resourceSettings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
 }
-
+//----------------------------------------------------------------------------//
 void Resource::transition(
-        D3D12_RESOURCE_STATES stateAfter, CommandList* commandList) {
-    transition(resourceSettings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, commandList);
+        D3D12_RESOURCE_STATES stateAfter, CommandList* cmdList) {
+    transition(resourceSettings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
 }
-
+//----------------------------------------------------------------------------//
 void Resource::transition(
-        D3D12_RESOURCE_STATES stateBefore, D3D12_RESOURCE_STATES stateAfter, const CommandListPtr& commandList) {
-    transition(stateBefore, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, commandList);
+        D3D12_RESOURCE_STATES stateBefore, D3D12_RESOURCE_STATES stateAfter, const CommandListPtr& cmdList) {
+    transition(stateBefore, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
 }
-
+//----------------------------------------------------------------------------//
 void Resource::transition(
-        D3D12_RESOURCE_STATES stateBefore, D3D12_RESOURCE_STATES stateAfter, CommandList* commandList) {
-    transition(stateBefore, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, commandList);
+        D3D12_RESOURCE_STATES stateBefore, D3D12_RESOURCE_STATES stateAfter, CommandList* cmdList) {
+    transition(stateBefore, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
 }
-
+//----------------------------------------------------------------------------//
 void Resource::transition(
         D3D12_RESOURCE_STATES stateBefore, D3D12_RESOURCE_STATES stateAfter, uint32_t subresourcce,
-        const CommandListPtr& commandList) {
-    transition(stateBefore, stateAfter, subresourcce, commandList.get());
+        const CommandListPtr& cmdList) {
+    transition(stateBefore, stateAfter, subresourcce, cmdList.get());
 }
-
+//----------------------------------------------------------------------------//
 void Resource::transition(
         D3D12_RESOURCE_STATES stateBefore, D3D12_RESOURCE_STATES stateAfter, uint32_t subresourcce,
-        CommandList* commandList) {
-    ID3D12GraphicsCommandList* d3d12GraphicsCommandList = commandList->getD3D12GraphicsCommandListPtr();
+        CommandList* cmdList) {
+    ID3D12GraphicsCommandList* d3d12GraphicsCommandList = cmdList->getD3D12GraphicsCommandListPtr();
     D3D12_RESOURCE_BARRIER resourceBarrier{};
     resourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     resourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -428,21 +459,20 @@ void Resource::transition(
     d3d12GraphicsCommandList->ResourceBarrier(1, &resourceBarrier);
     resourceSettings.resourceStates = stateAfter;
 }
-
-void Resource::barrierUAV(const CommandListPtr& commandList) {
-    barrierUAV(commandList.get());
+//----------------------------------------------------------------------------//
+void Resource::barrierUAV(const CommandListPtr& cmdList) {
+    barrierUAV(cmdList.get());
 }
-
-void Resource::barrierUAV(CommandList* commandList) {
-    ID3D12GraphicsCommandList* d3d12GraphicsCommandList = commandList->getD3D12GraphicsCommandListPtr();
+//----------------------------------------------------------------------------//
+void Resource::barrierUAV(CommandList* cmdList) {
+    ID3D12GraphicsCommandList* d3d12GraphicsCommandList = cmdList->getD3D12GraphicsCommandListPtr();
     D3D12_RESOURCE_BARRIER resourceBarrier{};
     resourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
     resourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     resourceBarrier.UAV.pResource = resource.Get();
     d3d12GraphicsCommandList->ResourceBarrier(1, &resourceBarrier);
 }
-
-
+//----------------------------------------------------------------------------//
 size_t Resource::getAllocationSizeInBytes() {
     auto* d3d12Device = device->getD3D12Device2();
 #if defined(_MSC_VER) || !defined(_WIN32)
@@ -455,7 +485,7 @@ size_t Resource::getAllocationSizeInBytes() {
 #endif
     return allocationInfo.SizeInBytes;
 }
-
+//----------------------------------------------------------------------------//
 void Resource::queryCopiableFootprints() {
     if (!subresourceLayoutArray.empty()) {
         return;
@@ -471,22 +501,22 @@ void Resource::queryCopiableFootprints() {
            subresourceLayoutArray.data(), subresourceNumRowsArray.data(),
            subresourceRowSizeInBytesArray.data(), subresourceTotalBytesArray.data());
 }
-
+//----------------------------------------------------------------------------//
 size_t Resource::getCopiableSizeInBytes() {
     queryCopiableFootprints();
     return size_t(subresourceTotalBytesArray.at(0));
 }
-
+//----------------------------------------------------------------------------//
 size_t Resource::getNumRows() {
     queryCopiableFootprints();
     return size_t(subresourceNumRowsArray.at(0));
 }
-
+//----------------------------------------------------------------------------//
 size_t Resource::getRowSizeInBytes() {
     queryCopiableFootprints();
     return size_t(subresourceRowSizeInBytesArray.at(0));
 }
-
+//----------------------------------------------------------------------------//
 size_t Resource::getRowPitchInBytes() {
     queryCopiableFootprints();
     size_t rowSizeInBytes = getRowSizeInBytes();
@@ -495,12 +525,11 @@ size_t Resource::getRowPitchInBytes() {
     }
     return sgl::sizeceil(rowSizeInBytes, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
 }
-
+//----------------------------------------------------------------------------//
 D3D12_GPU_VIRTUAL_ADDRESS Resource::getGPUVirtualAddress() {
     return resource->GetGPUVirtualAddress();
 }
-
-
+//----------------------------------------------------------------------------//
 HANDLE Resource::getSharedHandle(const std::wstring& handleName) {
     auto* d3d12Device = device->getD3D12Device2();
     HANDLE fenceHandle{};
@@ -508,12 +537,41 @@ HANDLE Resource::getSharedHandle(const std::wstring& handleName) {
             resource.Get(), nullptr, GENERIC_ALL, handleName.data(), &fenceHandle));
     return fenceHandle;
 }
-
+//----------------------------------------------------------------------------//
 HANDLE Resource::getSharedHandle() {
     uint64_t resourceIdx = 0;
     // TODO: Apparently, the handle name may be "nullptr".
     std::wstring handleName = std::wstring(L"Local\\D3D12ResourceHandle") + std::to_wstring(resourceIdx);
     return getSharedHandle(handleName);
 }
+//----------------------------------------------------------------------------//
+void Resource::print() {
+    std::cout << "Resource:\n";
+    if (device) {
+        std::cout << "  Device  :\n";
+        std::cout << std::format("    Adapter name   : {}\n", device->getAdapterName());
+        std::cout << std::format("    Vendor ID      : {}\n", deviceVendor(device->getVendor()));
+        std::cout << std::format("    Feature level  : {}\n", featureLevel(device->getFeatureLevel()));
+        //std::cout << std::format("    DX12 device    : {}\n", device->getD3D12Device2());
+    }
+    else std::cout << "  Device  : NOT SET\n";
 
+    uint32_t dim = 0;
+
+    std::cout << "  Settings:\n";
+    // std::cout << std::format("    Resourse flags : {}\n", resourceSettings.resourceFlags);
+    // std::cout << std::format("    Heap     flags : {}\n", resourceSettings.heapFlags);
+    // std::cout << std::format("    Resourse states: {}\n", resourceSettings.resourceStates);
+    std::cout << std::format("    Dimensions     : {}\n", getDimensions(resourceSettings.resourceDesc.Dimension));
+    std::cout << std::format("    Width          : {}\n", resourceSettings.resourceDesc.Width);
+    std::cout << std::format("    Height         : {}\n", resourceSettings.resourceDesc.Height);
+    std::cout << std::format("    Depth/Arraysize: {}\n", resourceSettings.resourceDesc.DepthOrArraySize);
+    std::cout << std::format("    Alignment      : {}\n", resourceSettings.resourceDesc.Alignment);
+    std::cout << std::format("    Mip Levels     : {}\n", resourceSettings.resourceDesc.MipLevels);
+    std::cout << std::format("    Format         : {}\n", static_cast<uint32_t>(resourceSettings.resourceDesc.Format));
+    // std::cout << std::format("    Sample desc.   : {}\n", resourceSettings.resourceDesc.SampleDesc);
+    std::cout << std::format("    Layout         : {}\n", getTextureLayout(resourceSettings.resourceDesc.Layout));
+    // std::cout << std::format("    Desc. flags    : {}\n", resourceSettings.resourceDesc.Flags);
+}
+//-==========================================================================-//
 }}

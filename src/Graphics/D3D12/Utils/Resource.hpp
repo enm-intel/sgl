@@ -106,6 +106,8 @@ public:
     [[nodiscard]] inline const ResourceSettings& getResourceSettings() const { return resourceSettings; }
     [[nodiscard]] inline const D3D12_RESOURCE_DESC& getD3D12ResourceDesc() const { return resourceSettings.resourceDesc; }
 
+    void print();
+
 private:
     Device* device;
 

@@ -156,8 +156,12 @@ public:
     virtual void copyFromDevicePtrAsync(void* devicePtrSrc, StreamWrapper stream, void* eventOut = nullptr) = 0;
     virtual void copyToDevicePtrAsync(void* devicePtrDst, StreamWrapper stream, void* eventOut = nullptr) = 0;
 
+    virtual void print() = 0;
+
+    const void *mipmap() const { return mipmappedArray; }
+
     template <typename C>
-    C *cast() const { return reinterpret_cast<C *>(mipmappedArray); }
+    const C *cast() const { return reinterpret_cast<C *>(mipmappedArray); }
 
 protected:
     virtual void importExternalMemoryWin32Handle() = 0;
