@@ -356,18 +356,18 @@ void ImageD3D12SyclInterop::importExternalMemoryWin32Handle() {
 
     wrapperImg->memHandle = syclexp::map_external_image_memory(
             wrapperMem->syclExternalMem, imgDesc, *g_syclQueue);
-    mipmappedArray = reinterpret_cast<void*>(wrapperImg);
+    _mipmap = reinterpret_cast<void*>(wrapperImg);
     std::cerr << "LEAVE: ImageD3D12SyclInterop::importExternalMemoryWin32Handle())\n";
 }
 //----------------------------------------------------------------------------//
 void ImageD3D12SyclInterop::free() {
     freeHandle();
-    if (mipmappedArray) {
-        auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(mipmappedArray);
+    if (_mipmap) {
+        auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(_mipmap);
         syclexp::free_image_mem(
                 wrapperImg->memHandle, wrapperImg->imgDesc.type, *g_syclQueue);
         delete wrapperImg;
-        mipmappedArray = {};
+        _mipmap = {};
     }
     if (externalMemory) {
         auto* wrapper = reinterpret_cast<SyclExternalMemWrapper*>(externalMemory);
@@ -383,7 +383,7 @@ ImageD3D12SyclInterop::~ImageD3D12SyclInterop() {
 //----------------------------------------------------------------------------//
 void ImageD3D12SyclInterop::copyFromDevicePtrAsync(
         void* devicePtrSrc, StreamWrapper stream, void* eventOut) {
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(mipmappedArray);
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(_mipmap);
     auto syclEvent = stream.syclQueuePtr->ext_oneapi_copy(
             devicePtrSrc, wrapperImg->memHandle, wrapperImg->imgDesc);
     if (eventOut) {
@@ -394,7 +394,7 @@ void ImageD3D12SyclInterop::copyFromDevicePtrAsync(
 void ImageD3D12SyclInterop::copyToDevicePtrAsync(
         void* devicePtrDst, StreamWrapper stream, void* eventOut) {
     std::cerr << "ENTER: ImageD3D12SyclInterop::copyToDevicePtrAsync(void*, StreamWrapper, void*)\n";
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(mipmappedArray);
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(_mipmap);
     auto syclEvent = stream.syclQueuePtr->ext_oneapi_copy(
             wrapperImg->memHandle, devicePtrDst, wrapperImg->imgDesc);
     if (eventOut) {
@@ -411,7 +411,7 @@ void ImageD3D12SyclInterop::print() {
     std::cout << std::format("  Normalize coords : {}\n", imageComputeApiInfo.textureExternalMemorySettings.useNormalizedCoordinates);
     std::cout << std::format("  Linear interp.   : {}\n", imageComputeApiInfo.textureExternalMemorySettings.useTrilinearOptimization);
     std::cout << std::format("  Read as int      : {}\n", imageComputeApiInfo.textureExternalMemorySettings.readAsInteger);
-    std::cout << std::format("  Mipmap array     : {}\n", mipmappedArray);
+    std::cout << std::format("  Mipmap array     : {}\n", _mipmap);
     std::cout << std::format("  External memory  : {}\n", externalMemory);
     std::cout << std::format("  Handle           : {}\n", handle);
     std::cerr << "LEAVE: ImageD3D12SyclInterop::print()\n";
@@ -423,7 +423,7 @@ void UnsampledImageD3D12SyclInterop::initialize(const ImageD3D12ComputeApiExtern
     static_assert(sizeof(syclexp::unsampled_image_handle) == sizeof(rawImageHandle));
     this->image = _image;
     auto imageVkSycl = std::static_pointer_cast<ImageD3D12SyclInterop>(image);
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->mipmappedArray);
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->_mipmap);
 
     if (!syclexp::is_image_handle_supported<syclexp::unsampled_image_handle>(
             wrapperImg->imgDesc, syclexp::image_memory_handle_type::opaque_handle,
@@ -468,7 +468,7 @@ void SampledImageD3D12SyclInterop::initialize(
     const auto& samplerDesc = imageComputeApiInfo.samplerDesc;
 
     auto imageVkSycl = std::static_pointer_cast<ImageD3D12SyclInterop>(image);
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->mipmappedArray);
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->_mipmap);
 
     if (!syclexp::is_image_handle_supported<syclexp::sampled_image_handle>(
             wrapperImg->imgDesc, syclexp::image_memory_handle_type::opaque_handle,

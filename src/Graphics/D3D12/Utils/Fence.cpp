@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
+
 #include "Device.hpp"
 #include "Fence.hpp"
 
@@ -53,7 +55,11 @@ void Fence::waitOnCpu(uint64_t value) {
 }
 
 bool Fence::waitOnCpu(uint64_t value, DWORD timeoutMs) {
-    if (fence->GetCompletedValue() < value) {
+    uint64_t completedValue = fence->GetCompletedValue();
+    std::cerr << "ENTER: Fence::waitOnCpu(uint64_t, DWORD)\n";
+    std::cerr << "  Value (waited on): " << value << "\n";
+    std::cerr << "  Value (completed): " << completedValue << "\n";
+    if (completedValue < value) {
         if (!fenceEvent) {
             fenceEvent = ::CreateEvent(nullptr, false, false, nullptr);
             if (!fenceEvent) {
@@ -71,6 +77,7 @@ bool Fence::waitOnCpu(uint64_t value, DWORD timeoutMs) {
             return false;
         }
     }
+    std::cerr << "LEAVE: Fence::waitOnCpu(uint64_t, DWORD)\n";
     return true;
 }
 

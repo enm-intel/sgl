@@ -175,18 +175,20 @@ ID3D12CommandQueue* Device::getD3D12CommandQueue(CommandListType cmdListType) {
     return nullptr;
 }
 //----------------------------------------------------------------------------//
-void Device::runOnce(const std::function<void(CommandList*)>& workFunctor, CommandListType cmdListType) {
+void Device::runOnce(const std::function<void(CommandList*)>& func, CommandListType cmdListType) {
     std::cerr << "ENTER: Device::runOnce(const std::function<void(CommandList*)>&, CommandListType\n";
     CommandListPtr cmdList = commandListsSingleTime[int(cmdListType)];
     if (!cmdList) {
+        std::cerr << "  Creating new command list\n";
         cmdList = std::make_shared<CommandList>(this, cmdListType);
         commandListsSingleTime[int(cmdListType)] = cmdList;
     } else {
+        std::cerr << "  Resetting existing command list\n";
         cmdList->reset();
     }
     ID3D12CommandList* d3d12CommandList = cmdList->getD3D12CommandListPtr();
     ID3D12CommandQueue* d3d12CommandQueue = getD3D12CommandQueue(cmdListType);
-    workFunctor(cmdList.get());
+    func(cmdList.get());
 
     FencePtr fence = std::make_shared<Fence>(this);
     cmdList->close();

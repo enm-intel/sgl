@@ -158,10 +158,10 @@ public:
 
     virtual void print() = 0;
 
-    const void *mipmap() const { return mipmappedArray; }
+    const void *mipmap() const { return _mipmap; }
 
     template <typename C>
-    const C *cast() const { return reinterpret_cast<C *>(mipmappedArray); }
+    const C *cast() const { return reinterpret_cast<C *>(_mipmap); }
 
 protected:
     virtual void importExternalMemoryWin32Handle() = 0;
@@ -170,7 +170,7 @@ protected:
 
     sgl::d3d12::ResourcePtr resource;
     ImageD3D12ComputeApiInfo imageComputeApiInfo{};
-    void *mipmappedArray{}; // CUmipmappedArray or hipMipmappedArray_t or ze_image_handle_t or SyclImageMemHandleWrapper (image_mem_handle)
+    void *_mipmap{}; // CUmipmappedArray or hipMipmappedArray_t or ze_image_handle_t or SyclImageMemHandleWrapper (image_mem_handle)
 
     HANDLE handle = nullptr;
 };

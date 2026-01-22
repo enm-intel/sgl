@@ -172,9 +172,7 @@ void BufferD3D12ComputeApiExternalMemory::freeHandle() {
 //-==========================================================================-//
 void ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr& _resource) {
     std::cerr << "ENTER: ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr&)\n";
-    if (mipmappedArray) {
-        free();
-    }
+    if (_mipmap) free();
 
     resource = _resource;
     handle = _resource->getSharedHandle();
@@ -185,9 +183,7 @@ void ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr& _re
 void ImageD3D12ComputeApiExternalMemory::initialize(
             sgl::d3d12::ResourcePtr& _resource, const ImageD3D12ComputeApiInfo& _imageComputeApiInfo) {
     std::cerr << "ENTER: ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr&, const ImageD3D12ComputeApiInfo&)\n";
-    if (mipmappedArray) {
-        free();
-    }
+    if (_mipmap) free();
 
     resource = _resource;
     imageComputeApiInfo = _imageComputeApiInfo;

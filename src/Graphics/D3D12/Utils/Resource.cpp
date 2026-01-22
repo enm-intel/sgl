@@ -397,34 +397,35 @@ void Resource::uploadDataLinearInternal(
         ID3D12Resource* intermediateResource, CommandList* cmdList) {
     std::cerr << "ENTER: Resource::uploadDataLinearInternal(size_t, const void*, ID3D12Resource*, CommandList*)\n";
     auto* d3d12CommandList = cmdList->getD3D12GraphicsCommandListPtr();
-    D3D12_SUBRESOURCE_DATA subresourceData = {};
-    subresourceData.pData = dataPtr;
+    D3D12_SUBRESOURCE_DATA subData = {};
+    subData.pData = dataPtr;
     if (settings.resourceDesc.Height <= 1 && settings.resourceDesc.DepthOrArraySize <= 1) {
         // 1D data (no pitches necessary).
-        subresourceData.RowPitch = LONG_PTR(sizeInBytesData);
-        subresourceData.SlicePitch = subresourceData.RowPitch;
+        subData.RowPitch = LONG_PTR(sizeInBytesData);
+        subData.SlicePitch = subData.RowPitch;
     } else if (settings.resourceDesc.DepthOrArraySize <= 1) {
         // 2D data (no slice pitch necessary).
-        subresourceData.RowPitch = LONG_PTR(getRowSizeInBytes());
-        subresourceData.SlicePitch = subresourceData.RowPitch * LONG_PTR(settings.resourceDesc.Width);
+        subData.RowPitch = LONG_PTR(getRowSizeInBytes());
+        subData.SlicePitch = subData.RowPitch * LONG_PTR(settings.resourceDesc.Width);
     } else {
         // 3D Data.
-        subresourceData.RowPitch = LONG_PTR(getRowSizeInBytes());
-        subresourceData.SlicePitch = subresourceData.RowPitch * LONG_PTR(settings.resourceDesc.Width * settings.resourceDesc.Height);
+        subData.RowPitch = LONG_PTR(getRowSizeInBytes());
+        subData.SlicePitch = subData.RowPitch * LONG_PTR(settings.resourceDesc.Width * settings.resourceDesc.Height);
     }
 
     queryCopiableFootprints();
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT& layout = _subLayout.at(0);
-    UINT64 rowSize = _subRowSize.at(0);
-    UINT numRows = _subNumRows.at(0);
-    UINT64 totalSize = _subTotalSize.at(0);
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT& layout =_subLayout.at(0);
+    UINT64 rowSize   =_subRowSize.at(0);
+    UINT   numRows   =_subNumRows.at(0);
+    UINT64 totalSize =_subTotalSize.at(0);
     UpdateSubresources(
             d3d12CommandList, getD3D12ResourcePtr(), intermediateResource, 0, 1,
-            totalSize, &layout, &numRows, &rowSize, &subresourceData);
+            totalSize, &layout, &numRows, &rowSize, &subData);
     std::cerr << "LEAVE: Resource::uploadDataLinearInternal(size_t, const void*, ID3D12Resource*, CommandList*)\n";
 }
 //----------------------------------------------------------------------------//
 void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
+    std::cerr << "ENTER: Resource::readBackDataLinear(size_t, void*)\n";
     if (numSubresources > 1) {
         sgl::Logfile::get()->throwError(
                 "Error in Resource::readBackDataInternal: "
@@ -530,6 +531,7 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
             &memcpyDest, &subresourceSrc, memcpyDest.RowPitch, settings.resourceDesc.Height,
             settings.resourceDesc.DepthOrArraySize);
     intermediateResource->Unmap(0, &writtenRange);
+    std::cerr << "LEAVE: Resource::readBackDataLinear(size_t, void*)\n";
 }
 //----------------------------------------------------------------------------//
 void Resource::transition(
