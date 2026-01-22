@@ -125,15 +125,10 @@ D3D_FEATURE_LEVEL Device::getFeatureLevel() const {
 }
 
 DeviceVendor Device::getVendor() const {
-    if (vendorId == 0x10DE) {
-        return DeviceVendor::NVIDIA;
-    } else if (vendorId == 0x1002) {
-        return DeviceVendor::AMD;
-    } else if (vendorId == 0x8086) {
-        return DeviceVendor::INTEL;
-    } else {
-        return DeviceVendor::UNKNOWN;
-    }
+    if (vendorId == 0x10DE) return DeviceVendor::NVIDIA;
+    if (vendorId == 0x1002) return DeviceVendor::AMD;
+    if (vendorId == 0x8086) return DeviceVendor::INTEL;
+    return DeviceVendor::UNKNOWN;
 }
 
 bool Device::getSupportsROVs() const {
