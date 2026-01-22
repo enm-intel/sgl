@@ -143,7 +143,7 @@ class DLL_OBJECT UnsampledImageVkLevelZeroInterop : public UnsampledImageVkCompu
 public:
     UnsampledImageVkLevelZeroInterop() = default;
     void initialize(const ImageVkComputeApiExternalMemoryPtr& _image) override { image = _image; }
-    ~UnsampledImageVkLevelZeroInterop() {}
+    ~UnsampledImageVkLevelZeroInterop() override {}
 
     [[nodiscard]] ze_image_handle_t getImageHandle() const { return std::static_pointer_cast<ImageVkLevelZeroInterop>(image)->getImageHandle(); }
 };
@@ -155,7 +155,7 @@ public:
     void initialize(
             const ImageVkComputeApiExternalMemoryPtr& _image,
             const TextureExternalMemorySettings& textureExternalMemorySettings) override { image = _image; }
-    ~SampledImageVkLevelZeroInterop() {}
+    ~SampledImageVkLevelZeroInterop() override {}
 
     [[nodiscard]] ze_image_handle_t getImageHandle() const { return std::static_pointer_cast<ImageVkLevelZeroInterop>(image)->getImageHandle(); }
 };

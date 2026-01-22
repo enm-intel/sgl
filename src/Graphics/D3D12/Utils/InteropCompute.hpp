@@ -160,7 +160,7 @@ public:
 
     const void *mipmap() const { return _mipmap; }
 
-    template <typename C>
+    template<typename C>
     const C *cast() const { return reinterpret_cast<C *>(_mipmap); }
 
 protected:

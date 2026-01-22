@@ -30,6 +30,8 @@
 #define SGL_RESOURCE_HPP
 
 #include <optional>
+
+#include <Graphics/Utils/FormatInfo.hpp>
 #include "../Utils/d3d12.hpp"
 
 namespace sgl { namespace d3d12 {
@@ -58,8 +60,15 @@ typedef std::shared_ptr<CommandList> CommandListPtr;
 class Resource;
 typedef std::shared_ptr<Resource> ResourcePtr;
 
-DLL_OBJECT size_t getDXGIFormatNumChannels(DXGI_FORMAT format);
-DLL_OBJECT size_t getDXGIFormatSizeInBytes(DXGI_FORMAT format);
+DLL_OBJECT uint32_t        getNumChannels(DXGI_FORMAT frmt);
+DLL_OBJECT size_t          getDXGIFormatSizeInBytes(DXGI_FORMAT frmt);
+DLL_OBJECT size_t          getDXGIFormatSizeInBytes(DXGI_FORMAT frmt);
+DLL_OBJECT ChannelFormat   getDXGIFormatChannelFormat(DXGI_FORMAT frmt);
+DLL_OBJECT ChannelCategory getDXGIFormatChannelCategory(DXGI_FORMAT frmt);
+DLL_OBJECT FormatInfo      getDXGIFormatInfo(DXGI_FORMAT frmt);
+
+DLL_OBJECT std::string getDXGIFormatHLSLStructuredTypeString(DXGI_FORMAT frmt);
+DLL_OBJECT std::string convertDXGIFormatToString(DXGI_FORMAT frmt);
 
 class DLL_OBJECT Resource {
 public:
@@ -72,20 +81,20 @@ public:
     void uploadDataLinear(size_t sizeInBytesData, const void* dataPtr);
     void uploadDataLinear(
             size_t sizeInBytesData, const void* dataPtr,
-            const ResourcePtr& intermediateResource, const CommandListPtr& commandList);
+            const ResourcePtr& intermediateResource, const CommandListPtr &cmdList);
     void readBackDataLinear(size_t sizeInBytesData, void* dataPtr);
 
-    void transition(D3D12_RESOURCE_STATES stateNew, const CommandListPtr& commandList);
-    void transition(D3D12_RESOURCE_STATES stateNew, CommandList* commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, const CommandListPtr& commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, CommandList* commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, const CommandListPtr& commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, CommandList* commandList);
-    void barrierUAV(const CommandListPtr& commandList);
-    void barrierUAV(CommandList* commandList);
+    void transition(D3D12_RESOURCE_STATES stateNew, const CommandListPtr &cmdList);
+    void transition(D3D12_RESOURCE_STATES stateNew, CommandList *cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, const CommandListPtr &cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, CommandList *cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, const CommandListPtr &cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, CommandList *cmdList);
+    void barrierUAV(const CommandListPtr &cmdList);
+    void barrierUAV(CommandList *cmdList);
 
-    void* map();
-    void* map(size_t readRangeBegin, size_t readRangeEnd);
+    void  *map();
+    void  *map(size_t readRangeBegin, size_t readRangeEnd);
     void unmap();
     void unmap(size_t writtenRangeBegin, size_t writtenRangeEnd);
 
@@ -121,9 +130,8 @@ private:
     std::vector<UINT64> _subRowSize;
     std::vector<UINT64> _subTotalSize;
 
-    void uploadDataLinearInternal(
-            size_t sizeInBytesData, const void* dataPtr,
-            ID3D12Resource* intermediateResource, CommandList* commandList);
+    void uploadDataLinearInternal(size_t sizeInBytesData, const void *dataPtr,
+                                  ID3D12Resource *intermediateResource, CommandList *cmdList);
 };
 
 }}

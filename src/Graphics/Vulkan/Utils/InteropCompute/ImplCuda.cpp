@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <cstring>
 #include "ImplCuda.hpp"
 #include "../InteropCuda.hpp"
 
@@ -78,9 +79,12 @@ void SemaphoreVkCudaInterop::importExternalSemaphore() {
 }
 
 SemaphoreVkCudaInterop::~SemaphoreVkCudaInterop() {
-    auto cuExternalSemaphore = reinterpret_cast<CUexternalSemaphore>(externalSemaphore);
-    CUresult cuResult = g_cudaDeviceApiFunctionTable.cuDestroyExternalSemaphore(cuExternalSemaphore);
-    checkCUresult(cuResult, "Error in cuDestroyExternalSemaphore: ");
+    if (externalSemaphore) {
+        auto cuExternalSemaphore = reinterpret_cast<CUexternalSemaphore>(externalSemaphore);
+        CUresult cuResult = g_cudaDeviceApiFunctionTable.cuDestroyExternalSemaphore(cuExternalSemaphore);
+        checkCUresult(cuResult, "Error in cuDestroyExternalSemaphore: ");
+        externalSemaphore = {};
+    }
 }
 
 void SemaphoreVkCudaInterop::signalSemaphoreComputeApi(
@@ -403,11 +407,11 @@ void UnsampledImageVkCudaInterop::initialize(const ImageVkComputeApiExternalMemo
     image = _image;
 
     CUDA_RESOURCE_DESC cudaResourceDesc{};
-    cudaResourceDesc.resType = CU_RESOURCE_TYPE_MIPMAPPED_ARRAY;
-    cudaResourceDesc.res.mipmap.hMipmappedArray = getCudaMipmappedArray();
+    cudaResourceDesc.resType = CU_RESOURCE_TYPE_ARRAY;
+    cudaResourceDesc.res.array.hArray = getCudaMipmappedArrayLevel(0);
 
     CUresult cuResult = g_cudaDeviceApiFunctionTable.cuSurfObjectCreate(&cudaSurfaceObject, &cudaResourceDesc);
-    checkCUresult(cuResult, "Error in cuSurfObjectDestroy: ");
+    checkCUresult(cuResult, "Error in cuSurfObjectCreate: ");
 }
 
 UnsampledImageVkCudaInterop::~UnsampledImageVkCudaInterop() {

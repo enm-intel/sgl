@@ -32,6 +32,24 @@
 #include "Resource.hpp"
 #include "InteropCompute.hpp"
 
+#ifdef SUPPORT_CUDA_INTEROP
+#include "InteropCuda.hpp"
+#include "InteropCompute/ImplCuda.hpp"
+#endif
+
+#ifdef SUPPORT_HIP_INTEROP
+#include "InteropHIP.hpp"
+#if HIP_VERSION_MAJOR < 6
+#error Please install HIP SDK >= 6.0 for timeline semaphore support.
+#endif
+#include "InteropCompute/ImplHip.hpp"
+#endif
+
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+#include "InteropLevelZero.hpp"
+#include "InteropCompute/ImplLevelZero.hpp"
+#endif
+
 #ifdef SUPPORT_SYCL_INTEROP
 #include "InteropCompute/ImplSycl.hpp"
 #include <sycl/sycl.hpp>
@@ -53,6 +71,21 @@ namespace sgl { namespace d3d12 {
 //----------------------------------------------------------------------------//
 InteropComputeApi decideInteropComputeApi(Device* device) {
     InteropComputeApi api = InteropComputeApi::NONE;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (device->getVendor() == DeviceVendor::NVIDIA && getIsCudaDeviceApiFunctionTableInitialized()) {
+        api = InteropComputeApi::CUDA;
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (device->getVendor() == DeviceVendor::AMD && getIsHipDeviceApiFunctionTableInitialized()) {
+        api = InteropComputeApi::HIP;
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (device->getVendor() == DeviceVendor::INTEL && getIsLevelZeroFunctionTableInitialized()) {
+        api = InteropComputeApi::LEVEL_ZERO;
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (g_syclQueue != nullptr) {
         api = InteropComputeApi::SYCL;
@@ -65,6 +98,21 @@ FenceD3D12ComputeApiInteropPtr createFenceD3D12ComputeApiInterop(Device* device,
     InteropComputeApi interopComputeApi = decideInteropComputeApi(device);
     (void)interopComputeApi;
     FenceD3D12ComputeApiInteropPtr fence;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        fence = std::make_shared<FenceD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (interopComputeApi == InteropComputeApi::HIP) {
+        fence = std::make_shared<FenceD3D12HipInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        fence = std::make_shared<FenceD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         fence = std::make_shared<FenceD3D12SyclInterop>();
@@ -83,6 +131,21 @@ BufferD3D12ComputeApiExternalMemoryPtr createBufferD3D12ComputeApiExternalMemory
     InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
     (void)interopComputeApi;
     BufferD3D12ComputeApiExternalMemoryPtr resourceExtMem;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        resourceExtMem = std::make_shared<BufferD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (interopComputeApi == InteropComputeApi::HIP) {
+        resourceExtMem = std::make_shared<BufferD3D12HipInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        resourceExtMem = std::make_shared<BufferD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         resourceExtMem = std::make_shared<BufferD3D12SyclInterop>();
@@ -101,6 +164,21 @@ ImageD3D12ComputeApiExternalMemoryPtr createImageD3D12ComputeApiExternalMemory(s
     InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
     (void)interopComputeApi;
     ImageD3D12ComputeApiExternalMemoryPtr resourceExtMem;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        resourceExtMem = std::make_shared<ImageD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (interopComputeApi == InteropComputeApi::HIP) {
+        resourceExtMem = std::make_shared<ImageD3D12HipInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        resourceExtMem = std::make_shared<ImageD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         resourceExtMem = std::make_shared<ImageD3D12SyclInterop>();
@@ -120,6 +198,21 @@ ImageD3D12ComputeApiExternalMemoryPtr createImageD3D12ComputeApiExternalMemory(
     InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
     (void)interopComputeApi;
     ImageD3D12ComputeApiExternalMemoryPtr resourceExtMem;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        resourceExtMem = std::make_shared<ImageD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (interopComputeApi == InteropComputeApi::HIP) {
+        resourceExtMem = std::make_shared<ImageD3D12HipInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        resourceExtMem = std::make_shared<ImageD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         resourceExtMem = std::make_shared<ImageD3D12SyclInterop>();
@@ -206,6 +299,21 @@ UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeA
     [[maybe_unused]] InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
     UnsampledImageD3D12ComputeApiExternalMemoryPtr unsampledImageExtMem;
     ImageD3D12ComputeApiExternalMemoryPtr imageExtMem = createImageD3D12ComputeApiExternalMemory(resource);
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (interopComputeApi == InteropComputeApi::HIP) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12HipInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         unsampledImageExtMem = std::make_shared<UnsampledImageD3D12SyclInterop>();
@@ -232,6 +340,21 @@ UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeA
     UnsampledImageD3D12ComputeApiExternalMemoryPtr unsampledImageExtMem;
     ImageD3D12ComputeApiExternalMemoryPtr imageExtMem = createImageD3D12ComputeApiExternalMemory(
             resource, imageComputeApiInfo);
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (interopComputeApi == InteropComputeApi::HIP) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12HipInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         unsampledImageExtMem = std::make_shared<UnsampledImageD3D12SyclInterop>();
@@ -251,6 +374,21 @@ UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeA
         const ImageD3D12ComputeApiExternalMemoryPtr& imageExtMem) {
     [[maybe_unused]] InteropComputeApi interopComputeApi = decideInteropComputeApi(imageExtMem->getResource()->getDevice());
     UnsampledImageD3D12ComputeApiExternalMemoryPtr unsampledImageExtMem;
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (interopComputeApi == InteropComputeApi::HIP) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12HipInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        unsampledImageExtMem = std::make_shared<UnsampledImageD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         unsampledImageExtMem = std::make_shared<UnsampledImageD3D12SyclInterop>();
@@ -272,6 +410,16 @@ SampledImageD3D12ComputeApiExternalMemoryPtr createSampledImageD3D12ComputeApiEx
     SampledImageD3D12ComputeApiExternalMemoryPtr sampledImageExtMem;
     ImageD3D12ComputeApiExternalMemoryPtr imageExtMem = createImageD3D12ComputeApiExternalMemory(
             resource, imageComputeApiInfo);
+#ifdef SUPPORT_CUDA_INTEROP
+    if (interopComputeApi == InteropComputeApi::CUDA) {
+        sampledImageExtMem = std::make_shared<SampledImageD3D12CudaInterop>();
+    }
+#endif
+#ifdef SUPPORT_LEVEL_ZERO_INTEROP
+    if (interopComputeApi == InteropComputeApi::LEVEL_ZERO) {
+        sampledImageExtMem = std::make_shared<SampledImageD3D12LevelZeroInterop>();
+    }
+#endif
 #ifdef SUPPORT_SYCL_INTEROP
     if (interopComputeApi == InteropComputeApi::SYCL) {
         sampledImageExtMem = std::make_shared<SampledImageD3D12SyclInterop>();

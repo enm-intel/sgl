@@ -98,7 +98,7 @@ protected:
         sgl::vk::DeviceFeatures requestedDeviceFeatures{};
         device->createDeviceHeadless(
                 instance, requiredDeviceExtensions, optionalDeviceExtensions, requestedDeviceFeatures);
-        std::cout << "Running on " << device->getDeviceName() << "\n";
+        std::cout << "Running on " << device->getDeviceName() << std::endl;
 
 #ifdef SUPPORT_LEVEL_ZERO_INTEROP
         if (device->getDeviceDriverId() == VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS
@@ -480,8 +480,8 @@ TEST_P(InteropTestLowLevelVkBindlessImageCreation, Formats) {
     runTestImageCreation(format, isFormatRequired);
 }
 
-INSTANTIATE_TEST_SUITE_P(TestFormats, InteropTestLowLevelVkRegularImageCreation, testedImageFormats, PrintToStringFormatConfig());
-INSTANTIATE_TEST_SUITE_P(TestFormats, InteropTestLowLevelVkBindlessImageCreation, testedImageFormats, PrintToStringFormatConfig());
+INSTANTIATE_TEST_SUITE_P(, InteropTestLowLevelVkRegularImageCreation, testedImageFormats, PrintToStringFormatConfig());
+INSTANTIATE_TEST_SUITE_P(, InteropTestLowLevelVkBindlessImageCreation, testedImageFormats, PrintToStringFormatConfig());
 
 
 void InteropTestLowLevelVk::checkSemaphoresSupported(bool& available) {
@@ -495,6 +495,13 @@ void InteropTestLowLevelVk::checkSemaphoresSupported(bool& available) {
 #else
         FAIL() << errorString;
 #endif
+    }
+#endif
+#ifdef SUPPORT_HIP_INTEROP
+    if (sgl::getIsHipDeviceApiFunctionTableInitialized() && !sgl::getHipInteropSupportsSemaphores()) {
+        available = false;
+        const char* errorString = "HIP does not support external semaphores.";
+        FAIL() << errorString;
     }
 #endif
 }
@@ -541,7 +548,7 @@ void InteropTestLowLevelVk::runTestsBufferCopySemaphore() {
     bufferVulkan->uploadData(sizeof(float), &sharedData);
     sgl::vk::BufferVkComputeApiExternalMemoryPtr bufferComputeApi;
     bufferComputeApi = sgl::vk::createBufferVkComputeApiExternalMemory(bufferVulkan);
-    auto* devicePtr = bufferComputeApi->getDevicePtr<float>();
+    //auto* devicePtr = bufferComputeApi->getDevicePtr<float>();
     float hostData = 0.0f;
 
     // Create renderer and command buffer.

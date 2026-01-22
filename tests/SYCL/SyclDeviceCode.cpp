@@ -26,6 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define DLL_OBJECT
+
+#include <stdexcept>
+
 #include "SyclDeviceCode.hpp"
 
 sycl::event writeSyclBufferData(sycl::queue& queue, size_t numEntries, float* devicePtr) {
@@ -38,31 +42,92 @@ sycl::event writeSyclBufferData(sycl::queue& queue, size_t numEntries, float* de
     return event;
 }
 
-sycl::event copySyclBindlessImageToBuffer(
-        sycl::queue& queue, sycl::ext::oneapi::experimental::unsampled_image_handle img, size_t width, size_t height,
-        float* devicePtr, const sycl::event& depEvent) {
+
+template<typename T, int C>
+sycl::event copySyclBindlessImgToBuf(
+        sycl::queue& queue, syclexp::unsampled_image_handle img, size_t width, size_t height,
+        T* devicePtr, const sycl::event& depEvent) {
     auto event = queue.submit([&](sycl::handler& cgh) {
         cgh.depends_on(depEvent);
-        cgh.parallel_for<class CopyBindlessImageToBufferKernel>(sycl::range<2>{width, height}, [=](sycl::id<2> it) {
+        cgh.parallel_for(sycl::range<2>{width, height}, [=](sycl::id<2> it) {
             const auto x = it[0];
             const auto y = it[1];
-            const auto index = x + y * width;
-            auto data = sycl::ext::oneapi::experimental::fetch_image<float>(img, sycl::int2{x, y});
-            devicePtr[index] = data;
+            const auto index = (x + y * width) * static_cast<size_t>(C);
+            auto data = syclexp::fetch_image<sycl::vec<T, C>>(img, sycl::int2{x, y});
+            for (int c = 0; c < C; c++) {
+                devicePtr[index + c] = data[c];
+            }
         });
     });
     return event;
 }
 
-sycl::event writeSyclBindlessImageIncreasingIndices(
-        sycl::queue& queue, sycl::ext::oneapi::experimental::unsampled_image_handle img, size_t width, size_t height) {
+sycl::event copySyclBindlessImgToBuf(
+        sycl::queue& queue, syclexp::unsampled_image_handle img,
+        const sgl::FormatInfo& formatInfo, size_t width, size_t height,
+        void* devicePtr, const sycl::event& depEvent) {
+    if (formatInfo.numChannels == 1 && formatInfo.channelFormat == sgl::ChannelFormat::FLOAT32) {
+        return copySyclBindlessImgToBuf<float, 1>(queue, img, width, height, static_cast<float*>(devicePtr), depEvent);
+    }
+    if (formatInfo.numChannels == 2 && formatInfo.channelFormat == sgl::ChannelFormat::FLOAT32) {
+        return copySyclBindlessImgToBuf<float, 2>(queue, img, width, height, static_cast<float*>(devicePtr), depEvent);
+    }
+    if (formatInfo.numChannels == 4 && formatInfo.channelFormat == sgl::ChannelFormat::FLOAT32) {
+        return copySyclBindlessImgToBuf<float, 4>(queue, img, width, height, static_cast<float*>(devicePtr), depEvent);
+    }
+    if (formatInfo.numChannels == 1 && formatInfo.channelFormat == sgl::ChannelFormat::UINT32) {
+        return copySyclBindlessImgToBuf<uint32_t, 1>(queue, img, width, height, static_cast<uint32_t*>(devicePtr), depEvent);
+    }
+    if (formatInfo.numChannels == 2 && formatInfo.channelFormat == sgl::ChannelFormat::UINT32) {
+        return copySyclBindlessImgToBuf<uint32_t, 2>(queue, img, width, height, static_cast<uint32_t*>(devicePtr), depEvent);
+    }
+    if (formatInfo.numChannels == 4 && formatInfo.channelFormat == sgl::ChannelFormat::UINT32) {
+        return copySyclBindlessImgToBuf<uint32_t, 4>(queue, img, width, height, static_cast<uint32_t*>(devicePtr), depEvent);
+    }
+    throw std::runtime_error("Error in writeSyclBindlessImageIncreasingIndices: Unsupported number of channels.");
+    return sycl::event();
+}
+
+
+template<typename T, int C>
+sycl::event writeSyclBindlessTestImg(
+        sycl::queue& queue, syclexp::unsampled_image_handle img, size_t width, size_t height) {
     auto event = queue.submit([&](sycl::handler& cgh) {
-        cgh.parallel_for<class WriteBindlessIncreasingIndicesKernel>(sycl::range<2>{width, height}, [=](sycl::id<2> it) {
+        cgh.parallel_for(sycl::range<2>{width, height}, [=](sycl::id<2> it) {
             const auto x = it[0];
             const auto y = it[1];
-            const auto index = x + y * width;
-            sycl::ext::oneapi::experimental::write_image<float>(img, sycl::int2{x, y}, float(index));
+            const auto index = (x + y * width) * static_cast<size_t>(C);
+            sycl::vec<T, C> data;
+            for (int c = 0; c < C; c++) {
+                data[c] = T(index + c);
+            }
+            syclexp::write_image<sycl::vec<T, C>>(img, sycl::int2{x, y}, data);
         });
     });
     return event;
+}
+
+sycl::event writeSyclBindlessTestImg(
+        sycl::queue& queue, syclexp::unsampled_image_handle img,
+        const sgl::FormatInfo& formatInfo, size_t width, size_t height) {
+    if (formatInfo.numChannels == 1 && formatInfo.channelFormat == sgl::ChannelFormat::FLOAT32) {
+        return writeSyclBindlessImageIncreasingIndices<float, 1>(queue, img, width, height);
+    }
+    if (formatInfo.numChannels == 2 && formatInfo.channelFormat == sgl::ChannelFormat::FLOAT32) {
+        return writeSyclBindlessImageIncreasingIndices<float, 2>(queue, img, width, height);
+    }
+    if (formatInfo.numChannels == 4 && formatInfo.channelFormat == sgl::ChannelFormat::FLOAT32) {
+        return writeSyclBindlessImageIncreasingIndices<float, 4>(queue, img, width, height);
+    }
+    if (formatInfo.numChannels == 1 && formatInfo.channelFormat == sgl::ChannelFormat::UINT32) {
+        return writeSyclBindlessImageIncreasingIndices<uint32_t, 1>(queue, img, width, height);
+    }
+    if (formatInfo.numChannels == 2 && formatInfo.channelFormat == sgl::ChannelFormat::UINT32) {
+        return writeSyclBindlessImageIncreasingIndices<uint32_t, 2>(queue, img, width, height);
+    }
+    if (formatInfo.numChannels == 4 && formatInfo.channelFormat == sgl::ChannelFormat::UINT32) {
+        return writeSyclBindlessImageIncreasingIndices<uint32_t, 4>(queue, img, width, height);
+    }
+    throw std::runtime_error("Error in writeSyclBindlessImageIncreasingIndices: Unsupported number of channels.");
+    return sycl::event();
 }

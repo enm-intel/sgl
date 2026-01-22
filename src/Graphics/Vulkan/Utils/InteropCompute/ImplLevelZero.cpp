@@ -93,11 +93,11 @@ void SemaphoreVkLevelZeroInterop::importExternalSemaphore() {
     if (zeResult == ZE_RESULT_ERROR_UNSUPPORTED_FEATURE || zeResult == ZE_RESULT_ERROR_UNINITIALIZED) {
         if (openMessageBoxOnComputeApiError) {
             sgl::Logfile::get()->writeError(
-                    "Error in ImageComputeApiExternalMemoryVk::_initialize: "
+                    "Error in SemaphoreVkLevelZeroInterop::importExternalSemaphore: "
                     "Unsupported Level Zero external semaphore type.");
         } else {
             sgl::Logfile::get()->write(
-                    "Error in ImageComputeApiExternalMemoryVk::_initialize: "
+                    "Error in SemaphoreVkLevelZeroInterop::importExternalSemaphore: "
                     "Unsupported Level Zero external semaphore type.", sgl::RED);
         }
         throw UnsupportedComputeApiFeatureException("Unsupported Level Zero external semaphore type");
@@ -112,6 +112,7 @@ SemaphoreVkLevelZeroInterop::~SemaphoreVkLevelZeroInterop() {
         auto zeExternalSemaphore = reinterpret_cast<ze_external_semaphore_ext_handle_t>(externalSemaphore);
         ze_result_t zeResult = g_levelZeroFunctionTable.zeDeviceReleaseExternalSemaphoreExt(zeExternalSemaphore);
         checkZeResult(zeResult, "Error in zeDeviceReleaseExternalSemaphoreExt: ");
+        externalSemaphore = {};
     }
 }
 

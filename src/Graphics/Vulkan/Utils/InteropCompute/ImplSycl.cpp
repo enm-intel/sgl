@@ -100,9 +100,11 @@ void SemaphoreVkSyclInterop::setExternalSemaphoreFd(int fileDescriptor) {
 #endif
 
 SemaphoreVkSyclInterop::~SemaphoreVkSyclInterop() {
-    auto* wrapper = reinterpret_cast<SyclExternalSemaphoreWrapper*>(externalSemaphore);
-    syclexp::release_external_semaphore(wrapper->syclExternalSemaphore, *g_syclQueue);
-    delete wrapper;
+    if (externalSemaphore) {
+        auto* wrapper = reinterpret_cast<SyclExternalSemaphoreWrapper*>(externalSemaphore);
+        syclexp::release_external_semaphore(wrapper->syclExternalSemaphore, *g_syclQueue);
+        delete wrapper;
+    }
 }
 
 void SemaphoreVkSyclInterop::signalSemaphoreComputeApi(

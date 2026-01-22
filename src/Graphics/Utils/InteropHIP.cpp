@@ -34,11 +34,13 @@
 #if defined(__linux__)
 #include <dlfcn.h>
 #include <unistd.h>
+#include <link.h>  //< for iterating loaded shared libraries.
 #elif defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <Psapi.h>  //< for iterating loaded DLLs.
 #endif
 
 namespace sgl {
@@ -55,14 +57,156 @@ void* g_hipLibraryHandle = nullptr;
 void* g_hiprtcLibraryHandle = nullptr;
 #endif
 
+static std::vector<std::string> getLoadedDynamicLibraries() {
+    std::vector<std::string> loadedLibraries;
+
+#ifdef _WIN32
+    HANDLE hProcess = GetCurrentProcess();
+
+    // The code below seems to generate duplicate entries and does not use drive letters (like "C:") in paths.
+    /*SYSTEM_INFO systemInfo{};
+    GetSystemInfo(&systemInfo);
+    PVOID baseAddress = nullptr;
+    LPCVOID maxAddress = systemInfo.lpMaximumApplicationAddress;
+    MEMORY_BASIC_INFORMATION memoryBasicInformation;
+    WCHAR mappedFileName[MAX_PATH];
+    while (VirtualQueryEx(hProcess, baseAddress, &memoryBasicInformation, sizeof(MEMORY_BASIC_INFORMATION))) {
+        if (baseAddress > maxAddress) {
+            break;
+        }
+        if (GetMappedFileNameW(hProcess, baseAddress, mappedFileName, sizeof(mappedFileName))) {
+            loadedLibraries.push_back(wideStringArrayToStdString(mappedFileName));
+        }
+        baseAddress = static_cast<PCHAR>(baseAddress) + memoryBasicInformation.RegionSize;
+    }*/
+
+    HMODULE hModules[1024];
+    TCHAR szModuleName[MAX_PATH];
+    DWORD cbNeeded{};
+    if (!EnumProcessModules(hProcess, hModules, sizeof(hModules), &cbNeeded)) {
+        return loadedLibraries;
+    }
+    const auto numModules = static_cast<uint32_t>(cbNeeded / sizeof(HMODULE));
+    for (uint32_t i = 0; i < numModules; i++) {
+        if (GetModuleFileNameEx(hProcess, hModules[i], szModuleName, sizeof(szModuleName) / sizeof(TCHAR))) {
+            loadedLibraries.emplace_back(szModuleName);
+        }
+    }
+#elif defined(__linux__)
+    link_map* map{};
+    auto* handle = dlopen(nullptr, RTLD_NOW);
+    if (dlinfo(handle, RTLD_DI_LINKMAP, &map) == -1) {
+        dlclose(handle);
+        return {};
+    }
+    while (map) {
+        loadedLibraries.emplace_back(map->l_name);
+        map = map->l_next;
+    }
+    dlclose(handle);
+#endif
+
+    return loadedLibraries;
+}
+
+#ifdef _WIN32
+static void appendPathListFromEnvVar(const char* envVarName, std::vector<std::string>& pathList) {
+#ifdef _MSC_VER
+    char* pathEnvVar = nullptr;
+    size_t stringSize = 0;
+    if (_dupenv_s(&pathEnvVar, &stringSize, envVarName) != 0) {
+        pathEnvVar = nullptr;
+    }
+    if (pathEnvVar) {
+        sgl::splitString(pathEnvVar, ';', pathList);
+        free(pathEnvVar);
+    }
+    pathEnvVar = nullptr;
+#else
+    const char* pathEnvVar = getenv(envVarName);
+    if (pathEnvVar) {
+        sgl::splitString(pathEnvVar, ';', pathList);
+    }
+#endif
+}
+#endif
+
+static std::string findHipLibraryPath() {
+    std::string hipLibraryPath;
+
+#if defined(__linux__)
+    hipLibraryPath = "libamdhip64.so";
+#elif defined(_WIN32)
+    hipLibraryPath = "amdhip64.dll";
+#endif
+
+    auto loadedLibraries = getLoadedDynamicLibraries();
+#if defined(__linux__)
+    // "libamdhip64.so" is provided by dev packages (such as https://packages.debian.org/sid/amd64/libamdhip64-dev/filelist).
+    // The runtime packages (e.g., https://packages.debian.org/sid/libamdhip64-6) provide "libamdhip64.so.<VER>".
+
+    // First, iterate over all loaded DLLs and see if "libamdhip64.so*" is already loaded (useful, e.g., for PyTorch modules).
+    for (auto& loadedLibraryPath : loadedLibraries) {
+        auto libraryName = sgl::FileUtils::get()->getPureFilename(loadedLibraryPath);
+        if (sgl::startsWith(libraryName, "libamdhip64.so")) {
+            hipLibraryPath = libraryName;
+            return hipLibraryPath;
+        }
+    }
+
+    // If we have not been successful, search PATH for "libamdhip64.so*".
+    // TODO
+#elif defined(_WIN32)
+    // ROCm version 6.1.2 renamed the .dll/.so name from "amdhip64.dll" to "amdhip64_<VER>.dll"
+    // (https://rocm.docs.amd.com/projects/install-on-windows/en/latest/#hip-sdk-changes).
+
+    // First, iterate over all loaded DLLs and see if "amdhip*.dll" is already loaded (useful, e.g., for PyTorch modules).
+    for (auto& loadedLibraryPath : loadedLibraries) {
+        auto loadedLibraryPathLower = sgl::toLowerCopy(loadedLibraryPath);
+        if (sgl::FileUtils::get()->getFileExtension(loadedLibraryPathLower) != "dll") {
+            continue;
+        }
+        auto libraryName = sgl::FileUtils::get()->removeExtension(
+                sgl::FileUtils::get()->getPureFilename(loadedLibraryPathLower));
+        if (sgl::startsWith(libraryName, "amdhip64")) {
+            hipLibraryPath = libraryName;
+            return hipLibraryPath;
+        }
+    }
+
+    // If we have not been successful, search HIP_PATH & PATH for "amdhip64*.dll".
+    std::vector<std::string> pathList;
+    appendPathListFromEnvVar("HIP_PATH", pathList);
+    for (std::string& pathDir : pathList) {
+        pathDir += "/bin";
+    }
+    appendPathListFromEnvVar("PATH", pathList);
+    for (const std::string& binDir : pathList) {
+        if (!sgl::FileUtils::get()->isDirectory(binDir)) {
+            continue;
+        }
+        std::vector<std::string> filesInDir = sgl::FileUtils::get()->getFilesInDirectoryVector(binDir);
+        for (const std::string& fileInDir : filesInDir) {
+            std::string fileName = sgl::FileUtils::get()->getPureFilename(fileInDir);
+            if (sgl::startsWith(fileName, "amdhip64") && sgl::endsWith(fileName, ".dll")) {
+                hipLibraryPath = binDir + "/" + fileName;
+            }
+        }
+    }
+#endif
+
+    return hipLibraryPath;
+}
+
 bool initializeHipDeviceApiFunctionTable() {
     typedef hipError_t ( *PFN_hipInit )( unsigned int Flags );
     typedef hipError_t ( *PFN_hipDrvGetErrorString)( hipError_t error, const char **pStr );
-    typedef hipError_t ( *PFN_hipDeviceGet )(hipDevice_t *device, int ordinal);
-    typedef hipError_t ( *PFN_hipGetDeviceCount )(int *count);
-    typedef hipError_t ( *PFN_hipDeviceGetUuid )(hipUUID *uuid, hipDevice_t dev);
-    typedef hipError_t ( *PFN_hipDeviceGetAttribute )(int *pi, hipDeviceAttribute_t attrib, hipDevice_t dev);
-    typedef hipError_t ( *PFN_hipGetDeviceProperties )(hipDeviceProp_t* prop, int deviceId);
+    typedef hipError_t ( *PFN_hipDeviceGet )( hipDevice_t *device, int ordinal );
+    typedef hipError_t ( *PFN_hipGetDeviceCount )( int *count );
+    typedef hipError_t ( *PFN_hipDeviceGetName )( char* name, int len, hipDevice_t device );
+    typedef hipError_t ( *PFN_hipDeviceGetUuid )( hipUUID *uuid, hipDevice_t dev );
+    typedef hipError_t ( *PFN_hipDeviceGetAttribute )(int *pi, hipDeviceAttribute_t attrib, hipDevice_t dev );
+    typedef hipError_t ( *PFN_hipGetDeviceProperties )(hipDeviceProp_t* prop, int deviceId );
     typedef hipError_t ( *PFN_hipCtxCreate )( hipCtx_t *pctx, unsigned int flags, hipDevice_t dev );
     typedef hipError_t ( *PFN_hipCtxDestroy )( hipCtx_t ctx );
     typedef hipError_t ( *PFN_hipCtxGetCurrent )( hipCtx_t* pctx );
@@ -115,16 +259,17 @@ bool initializeHipDeviceApiFunctionTable() {
     typedef hipError_t ( *PFN_hipLaunchKernel )( hipFunction_t f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, hipStream_t hStream, void** kernelParams, void** extra );
     typedef hipError_t ( *PFN_hipOccupancyMaxPotentialBlockSize )( int *minGridSize, int *blockSize, hipFunction_t func, const void* blockSizeToDynamicSMemSize, size_t dynamicSMemSize, int blockSizeLimit );
 
+    std::string hipLibraryPath = findHipLibraryPath();
 #if defined(__linux__)
-    g_hipLibraryHandle = dlopen("libamdhip64.so", RTLD_NOW | RTLD_LOCAL);
+    g_hipLibraryHandle = dlopen(hipLibraryPath.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!g_hipLibraryHandle) {
         sgl::Logfile::get()->writeInfo("initializeHipDeviceApiFunctionTable: Could not load libamdhip64.so.");
         return false;
     }
 #elif defined(_WIN32)
-    g_hipLibraryHandle = LoadLibraryA("amdhip64.dll");
+    g_hipLibraryHandle = LoadLibraryA(hipLibraryPath.c_str());
     if (!g_hipLibraryHandle) {
-        sgl::Logfile::get()->writeInfo("initializeHipDeviceApiFunctionTable: Could not load amdhip64.dll.");
+        sgl::Logfile::get()->writeInfo("initializeHipDeviceApiFunctionTable: Could not load HIP DLL.");
         return false;
     }
 #endif
@@ -132,6 +277,7 @@ bool initializeHipDeviceApiFunctionTable() {
     g_hipDeviceApiFunctionTable.hipDrvGetErrorString = PFN_hipDrvGetErrorString(dlsym(g_hipLibraryHandle, TOSTRING(hipDrvGetErrorString)));
     g_hipDeviceApiFunctionTable.hipDeviceGet = PFN_hipDeviceGet(dlsym(g_hipLibraryHandle, TOSTRING(hipDeviceGet)));
     g_hipDeviceApiFunctionTable.hipGetDeviceCount = PFN_hipGetDeviceCount(dlsym(g_hipLibraryHandle, TOSTRING(hipGetDeviceCount)));
+    g_hipDeviceApiFunctionTable.hipDeviceGetName = PFN_hipDeviceGetName(dlsym(g_hipLibraryHandle, TOSTRING(hipDeviceGetName)));
     g_hipDeviceApiFunctionTable.hipDeviceGetUuid = PFN_hipDeviceGetUuid(dlsym(g_hipLibraryHandle, TOSTRING(hipDeviceGetUuid)));
     g_hipDeviceApiFunctionTable.hipDeviceGetAttribute = PFN_hipDeviceGetAttribute(dlsym(g_hipLibraryHandle, TOSTRING(hipDeviceGetAttribute)));
     g_hipDeviceApiFunctionTable.hipGetDeviceProperties = PFN_hipGetDeviceProperties(dlsym(g_hipLibraryHandle, TOSTRING(hipGetDeviceProperties)));
@@ -191,6 +337,7 @@ bool initializeHipDeviceApiFunctionTable() {
         || !g_hipDeviceApiFunctionTable.hipDrvGetErrorString
         || !g_hipDeviceApiFunctionTable.hipDeviceGet
         || !g_hipDeviceApiFunctionTable.hipGetDeviceCount
+        || !g_hipDeviceApiFunctionTable.hipDeviceGetName
         || !g_hipDeviceApiFunctionTable.hipDeviceGetUuid
         || !g_hipDeviceApiFunctionTable.hipDeviceGetAttribute
         || !g_hipDeviceApiFunctionTable.hipGetDeviceProperties
@@ -214,8 +361,8 @@ bool initializeHipDeviceApiFunctionTable() {
         || !g_hipDeviceApiFunctionTable.hipMemcpyAsync
         || !g_hipDeviceApiFunctionTable.hipMemcpyDtoHAsync
         || !g_hipDeviceApiFunctionTable.hipMemcpyHtoDAsync
-        || !g_hipDeviceApiFunctionTable.hipMemcpy2DToArrayAsync
-        || !g_hipDeviceApiFunctionTable.hipMemcpy2DFromArrayAsync
+        //|| !g_hipDeviceApiFunctionTable.hipMemcpy2DToArrayAsync
+        //|| !g_hipDeviceApiFunctionTable.hipMemcpy2DFromArrayAsync
         || !g_hipDeviceApiFunctionTable.hipDrvMemcpy3DAsync
         || !g_hipDeviceApiFunctionTable.hipArrayCreate
         || !g_hipDeviceApiFunctionTable.hipArray3DCreate
@@ -233,10 +380,10 @@ bool initializeHipDeviceApiFunctionTable() {
         || !g_hipDeviceApiFunctionTable.hipExternalMemoryGetMappedBuffer
         || !g_hipDeviceApiFunctionTable.hipExternalMemoryGetMappedMipmappedArray
         || !g_hipDeviceApiFunctionTable.hipDestroyExternalMemory
-        || !g_hipDeviceApiFunctionTable.hipImportExternalSemaphore
-        || !g_hipDeviceApiFunctionTable.hipSignalExternalSemaphoresAsync
-        || !g_hipDeviceApiFunctionTable.hipWaitExternalSemaphoresAsync
-        || !g_hipDeviceApiFunctionTable.hipDestroyExternalSemaphore
+        //|| !g_hipDeviceApiFunctionTable.hipImportExternalSemaphore
+        //|| !g_hipDeviceApiFunctionTable.hipSignalExternalSemaphoresAsync
+        //|| !g_hipDeviceApiFunctionTable.hipWaitExternalSemaphoresAsync
+        //|| !g_hipDeviceApiFunctionTable.hipDestroyExternalSemaphore
         || !g_hipDeviceApiFunctionTable.hipModuleLoad
         || !g_hipDeviceApiFunctionTable.hipModuleLoadData
         || !g_hipDeviceApiFunctionTable.hipModuleLoadDataEx
@@ -249,6 +396,16 @@ bool initializeHipDeviceApiFunctionTable() {
                 "Error in initializeHipDeviceApiFunctionTable: "
                 "At least one function pointer could not be loaded.");
     }
+
+    /*
+     * Not checked as of 2026-01-02 due to varying support:
+     * || !g_hipDeviceApiFunctionTable.hipMemcpy2DToArrayAsync
+     * || !g_hipDeviceApiFunctionTable.hipMemcpy2DFromArrayAsync
+     * || !g_hipDeviceApiFunctionTable.hipImportExternalSemaphore
+     * || !g_hipDeviceApiFunctionTable.hipSignalExternalSemaphoresAsync
+     * || !g_hipDeviceApiFunctionTable.hipWaitExternalSemaphoresAsync
+     * || !g_hipDeviceApiFunctionTable.hipDestroyExternalSemaphore
+     */
 
     return true;
 }
@@ -271,27 +428,13 @@ bool initializeHiprtcFunctionTable() {
     }
 #elif defined(_WIN32)
     std::vector<std::string> pathList;
-#ifdef _MSC_VER
-    char* pathEnvVar = nullptr;
-    size_t stringSize = 0;
-    if (_dupenv_s(&pathEnvVar, &stringSize, "HIP_PATH") != 0) {
-        pathEnvVar = nullptr;
+    appendPathListFromEnvVar("HIP_PATH", pathList);
+    for (std::string& pathDir : pathList) {
+        pathDir += "/bin";
     }
-    if (pathEnvVar) {
-        sgl::splitString(pathEnvVar, ';', pathList);
-        free(pathEnvVar);
-    }
-    pathEnvVar = nullptr;
-#else
-    const char* pathEnvVar = getenv("HIP_PATH");
-    if (pathEnvVar) {
-        sgl::splitString(pathEnvVar, ';', pathList);
-    }
-#endif
-
+    appendPathListFromEnvVar("PATH", pathList);
     std::string hiprtcDllFileName;
-    for (const std::string& pathDir : pathList) {
-        std::string binDir = pathDir + "/bin";
+    for (const std::string& binDir : pathList) {
         if (!sgl::FileUtils::get()->isDirectory(binDir)) {
             continue;
         }
@@ -391,6 +534,26 @@ void _checkHiprtcResult(hiprtcResult result, const char* text, const char* locat
         throw std::runtime_error(
                 std::string() + locationText + ": " + text + g_hiprtcFunctionTable.hiprtcGetErrorString(result));
     }
+}
+
+bool getHipInteropSupportsSemaphores() {
+    if (!g_hipLibraryHandle) {
+        Logfile::get()->throwError("Error in getHipInteropSupportsImageCopy: HIP library not loaded.");
+    }
+    // Seems to be unsupported on Linux as of 2026-01-02 (according to docs, I have no access to a HIP-supported Linux AMD system):
+    // https://rocm.docs.amd.com/projects/HIP/en/latest/reference/hip_runtime_api/modules/memory_management/external_resource_interoperability.html).
+    return g_hipDeviceApiFunctionTable.hipImportExternalSemaphore
+            && g_hipDeviceApiFunctionTable.hipSignalExternalSemaphoresAsync
+            && g_hipDeviceApiFunctionTable.hipWaitExternalSemaphoresAsync
+            && g_hipDeviceApiFunctionTable.hipDestroyExternalSemaphore;
+}
+
+bool getHipInteropSupportsImageCopy() {
+    if (!g_hipLibraryHandle) {
+        Logfile::get()->throwError("Error in getHipInteropSupportsImageCopy: HIP library not loaded.");
+    }
+    // Seems to be unsupported (i.e., nullptr on loading amdhip64_7.dll) as of 2026-01-02.
+    return g_hipDeviceApiFunctionTable.hipMemcpy2DToArrayAsync && g_hipDeviceApiFunctionTable.hipMemcpy2DFromArrayAsync;
 }
 
 }

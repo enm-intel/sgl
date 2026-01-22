@@ -31,11 +31,16 @@
 
 #include <sycl/sycl.hpp>
 
-DLL_OBJECT_SYCL sycl::event writeSyclBufferData(sycl::queue& queue, size_t numEntries, float* devicePtr);
-DLL_OBJECT_SYCL sycl::event copySyclBindlessImageToBuffer(
-        sycl::queue& queue, sycl::ext::oneapi::experimental::unsampled_image_handle img, size_t width, size_t height,
-        float* devicePtr, const sycl::event& depEvent);
-DLL_OBJECT_SYCL sycl::event writeSyclBindlessImageIncreasingIndices(
-        sycl::queue& queue, sycl::ext::oneapi::experimental::unsampled_image_handle img, size_t width, size_t height);
+#include <Graphics/Utils/FormatInfo.hpp>
 
+namespace syclexp = sycl::ext::oneapi::experimental;
+
+DLL_OBJECT_SYCL sycl::event writeSyclBufferData(sycl::queue &queue, size_t numEntries, float *devPtr);
+DLL_OBJECT_SYCL sycl::event copySyclBindlessImgToBuf(sycl::queue &queue,
+                                                     syclexp::unsampled_image_handle img,
+                                                     const sgl::FormatInfo &format, size_t wdth, size_t hght,
+                                                     void *devPtr, const sycl::event &depEvent);
+DLL_OBJECT_SYCL sycl::event writeSyclBindlessTestImg(sycl::queue &queue,
+                                                     syclexp::unsampled_image_handle img,
+                                                     const sgl::FormatInfo &format, size_t wdth, size_t hght);
 #endif //SGL_TESTS_SYCLDEVICECODE_HPP

@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2025, Christoph Neuhauser
+ * Copyright (c) 2025-2026, Christoph Neuhauser
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,7 +61,7 @@ constexpr sycl::image_channel_order sycl_rg   = sycl::image_channel_order::rg;
 constexpr sycl::image_channel_order sycl_rgb  = sycl::image_channel_order::rgb;
 constexpr sycl::image_channel_order sycl_rgba = sycl::image_channel_order::rgba;
 
-template <typename T> 
+template<typename T> 
 inline constexpr uint32_t to_u32(T val) { return static_cast<uint32_t>(val); }
 // clang-format on
 
@@ -71,7 +71,7 @@ struct SyclExternalSemaphoreWrapper {
     syclexp::external_semaphore syclExternalSemaphore;
 };
 struct SyclExternalMemWrapper {
-    sycl::ext::oneapi::experimental::external_mem syclExternalMem;
+    syclexp::external_mem syclExternalMem;
 };
 struct SyclImageMemHandleWrapper {
     syclexp::image_descriptor imgDesc;
@@ -315,9 +315,10 @@ void ImageD3D12SyclInterop::importExternalMemoryWin32Handle() {
         // TODO: When imgDesc.array_size?
         imgDesc.depth = resourceDesc.DepthOrArraySize;
     }
-    imgDesc.num_levels = resourceDesc.MipLevels;
+    // CUDA_ERROR_ALREADY_MAPPED generated if numLevels == 0.
+    imgDesc.num_levels = std::max(static_cast<unsigned>(resourceDesc.MipLevels), 1u);
 
-    imgDesc.num_channels = unsigned(getDXGIFormatNumChannels(resourceDesc.Format));
+    imgDesc.num_channels = getNumChannels(resourceDesc.Format);
     if (imgDesc.num_levels > 1) {
         imgDesc.type = syclexp::image_type::mipmap;
     } else {
