@@ -29,6 +29,8 @@
 #ifndef SGL_D3D12_INTEROPCOMPUTE_HPP
 #define SGL_D3D12_INTEROPCOMPUTE_HPP
 
+#include <iostream>
+
 #include <Graphics/Utils/InteropCompute.hpp>
 
 #include "d3d12.hpp"
@@ -154,6 +156,9 @@ public:
     virtual void copyFromDevicePtrAsync(void* devicePtrSrc, StreamWrapper stream, void* eventOut = nullptr) = 0;
     virtual void copyToDevicePtrAsync(void* devicePtrDst, StreamWrapper stream, void* eventOut = nullptr) = 0;
 
+    template <typename C>
+    C *cast() const { return reinterpret_cast<C *>(mipmappedArray); }
+
 protected:
     virtual void importExternalMemoryWin32Handle() = 0;
     virtual void free() = 0;
@@ -161,7 +166,7 @@ protected:
 
     sgl::d3d12::ResourcePtr resource;
     ImageD3D12ComputeApiInfo imageComputeApiInfo{};
-    void* mipmappedArray{}; // CUmipmappedArray or hipMipmappedArray_t or ze_image_handle_t or SyclImageMemHandleWrapper (image_mem_handle)
+    void *mipmappedArray{}; // CUmipmappedArray or hipMipmappedArray_t or ze_image_handle_t or SyclImageMemHandleWrapper (image_mem_handle)
 
     HANDLE handle = nullptr;
 };
@@ -195,7 +200,9 @@ public:
         image->copyFromDevicePtrAsync(devicePtrSrc, stream, eventOut);
     }
     void copyToDevicePtrAsync(void* devicePtrDst, StreamWrapper stream, void* eventOut = nullptr) {
+        std::cerr << "ENTER: UnsampledImageD3D12ComputeApiExternalMemory::copyToDevicePtrAsync(void*, StreamWrapper, void*)\n";
         image->copyToDevicePtrAsync(devicePtrDst, stream, eventOut);
+        std::cerr << "LEAVE: UnsampledImageD3D12ComputeApiExternalMemory::copyToDevicePtrAsync(void*, StreamWrapper, void*)\n";
     }
 
 protected:

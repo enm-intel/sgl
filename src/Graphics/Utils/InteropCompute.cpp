@@ -31,10 +31,12 @@
 #include "InteropCompute.hpp"
 
 #ifdef SUPPORT_CUDA_INTEROP
+#pragma message("CUDA interop supported.")
 #include "InteropCuda.hpp"
 #endif
 
 #ifdef SUPPORT_HIP_INTEROP
+#pragma message("HIP interop supported.")
 #include "InteropHIP.hpp"
 #if HIP_VERSION_MAJOR < 6
 #error Please install HIP SDK >= 6.0 for timeline semaphore support.
@@ -42,10 +44,12 @@
 #endif
 
 #ifdef SUPPORT_LEVEL_ZERO_INTEROP
+#pragma message("Level-Zero interop supported.")
 #include "InteropLevelZero.hpp"
 #endif
 
 #ifdef SUPPORT_SYCL_INTEROP
+#pragma message("SYCL interop supported.")
 #include <sycl/sycl.hpp>
 /*
  * For some reason, the define for CUDA is in the default header sycl/include/sycl/backend.hpp, but for HIP it is in

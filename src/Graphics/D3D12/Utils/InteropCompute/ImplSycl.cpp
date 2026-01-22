@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
+
 #include "../Resource.hpp"
 #include "ImplSycl.hpp"
 
@@ -349,12 +351,14 @@ void ImageD3D12SyclInterop::copyFromDevicePtrAsync(
 
 void ImageD3D12SyclInterop::copyToDevicePtrAsync(
         void* devicePtrDst, StreamWrapper stream, void* eventOut) {
+    std::cerr << "ENTER: ImageD3D12SyclInterop::copyToDevicePtrAsync(void*, StreamWrapper, void*)\n";
     auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(mipmappedArray);
     auto syclEvent = stream.syclQueuePtr->ext_oneapi_copy(
             wrapperImg->syclImageMemHandle, devicePtrDst, wrapperImg->syclImageDescriptor);
     if (eventOut) {
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
+    std::cerr << "LEAVE: ImageD3D12SyclInterop::copyToDevicePtrAsync(void*, StreamWrapper, void*)\n";
 }
 
 
