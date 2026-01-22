@@ -63,7 +63,7 @@ DLL_OBJECT size_t getDXGIFormatSizeInBytes(DXGI_FORMAT format);
 
 class DLL_OBJECT Resource {
 public:
-    explicit Resource(Device* device, const ResourceSettings& resourceSettings);
+    explicit Resource(Device* device, const ResourceSettings& settings);
     ~Resource();
 
     /*
@@ -103,23 +103,23 @@ public:
 
     inline Device* getDevice() { return device; }
     inline ID3D12Resource* getD3D12ResourcePtr() { return resource.Get(); }
-    [[nodiscard]] inline const ResourceSettings& getResourceSettings() const { return resourceSettings; }
-    [[nodiscard]] inline const D3D12_RESOURCE_DESC& getD3D12ResourceDesc() const { return resourceSettings.resourceDesc; }
+    [[nodiscard]] inline const ResourceSettings& getResourceSettings() const { return settings; }
+    [[nodiscard]] inline const D3D12_RESOURCE_DESC& getD3D12ResourceDesc() const { return settings.resourceDesc; }
 
     void print();
 
 private:
     Device* device;
 
-    ResourceSettings resourceSettings;
+    ResourceSettings settings;
     uint32_t numSubresources = 0;
     ComPtr<ID3D12Resource> resource{};
 
     void queryCopiableFootprints();
-    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> subresourceLayoutArray;
-    std::vector<UINT> subresourceNumRowsArray;
-    std::vector<UINT64> subresourceRowSizeInBytesArray;
-    std::vector<UINT64> subresourceTotalBytesArray;
+    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> _subLayout;
+    std::vector<UINT> _subNumRows;
+    std::vector<UINT64> _subRowSize;
+    std::vector<UINT64> _subTotalSize;
 
     void uploadDataLinearInternal(
             size_t sizeInBytesData, const void* dataPtr,

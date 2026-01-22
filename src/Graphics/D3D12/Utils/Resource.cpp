@@ -59,6 +59,116 @@ std::string getTextureLayout(D3D12_TEXTURE_LAYOUT layout) {
     return std::string("Unspecified");
 }
 //----------------------------------------------------------------------------//
+std::string getResourceFlags(D3D12_RESOURCE_FLAGS flags) {
+    std::string flagStr = std::format("(0x{:X})", static_cast<uint32_t>(flags));
+
+    if (flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
+        flagStr += " ALLOW_RENDER_TARGET";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
+        flagStr += " ALLOW_DEPTH_STENCIL";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+        flagStr += " ALLOW_UNORDERED_ACCESS";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) {
+        flagStr += " DENY_SHADER_RESOURCE";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) {
+        flagStr += " ALLOW_CROSS_ADAPTER";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS) {
+        flagStr += " ALLOW_SIMULTANEOUS_ACCESS";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY) {
+        flagStr += " VIDEO_DECODE_REFERENCE_ONLY";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY) {
+        flagStr += " VIDEO_ENCODE_REFERENCE_ONLY";
+    }
+    if (flags & D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE) {
+        flagStr += " RAYTRACING_ACCELERATION_STRUCTURE";
+    }
+    return flagStr;
+}
+//----------------------------------------------------------------------------//
+std::string getHeapFlags(D3D12_HEAP_FLAGS flags) {
+    std::string flagStr = std::format("(0x{:X})", static_cast<uint32_t>(flags));
+
+    if (flags & D3D12_HEAP_FLAG_SHARED) {
+        flagStr += " SHARED";
+    }
+    if (flags & D3D12_HEAP_FLAG_DENY_BUFFERS) {
+        flagStr += " DENY_BUFFERS";
+    }
+    if (flags & D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES) {
+        flagStr += " DENY_RT_DS_TEXTURES";
+    }
+    if (flags & D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES) {
+        flagStr += " DENY_NON_RT_DS_TEXTURES";
+    }
+    if (flags & D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS) {
+        flagStr += " ALLOW_ONLY_BUFFERS";
+    }
+    if (flags & D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES) {
+        flagStr += " ALLOW_ONLY_NON_RT_DS_TEXTURES";
+    }
+    if (flags & D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES) {
+        flagStr += " ALLOW_ONLY_RT_DS_TEXTURES";
+    }
+    return flagStr;
+}
+//----------------------------------------------------------------------------//
+std::string getResourceStates(D3D12_RESOURCE_STATES states) {
+    std::string statesStr = std::format("(0x{:X})", static_cast<uint32_t>(states));
+    if (states & D3D12_RESOURCE_STATE_COMMON) {
+        statesStr += " COMMON";
+    }
+    if (states & D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER) {
+        statesStr += " VERTEX_AND_CONSTANT_BUFFER";
+    }
+    if (states & D3D12_RESOURCE_STATE_INDEX_BUFFER) {
+        statesStr += " INDEX_BUFFER";
+    }
+    if (states & D3D12_RESOURCE_STATE_RENDER_TARGET) {
+        statesStr += " RENDER_TARGET";
+    }
+    if (states & D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        statesStr += " UNORDERED_ACCESS";
+    }
+    if (states & D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+        statesStr += " DEPTH_WRITE";
+    }
+    if (states & D3D12_RESOURCE_STATE_DEPTH_READ) {
+        statesStr += " DEPTH_READ";
+    }
+    if (states & D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) {
+        statesStr += " NON_PIXEL_SHADER_RESOURCE";
+    }
+    if (states & D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+        statesStr += " PIXEL_SHADER_RESOURCE";
+    }
+    if (states & D3D12_RESOURCE_STATE_STREAM_OUT) {
+        statesStr += " STREAM_OUT";
+    }
+    if (states & D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT) {
+        statesStr += " INDIRECT_ARGUMENT";
+    }
+    if (states & D3D12_RESOURCE_STATE_COPY_DEST) {
+        statesStr += " COPY_DEST";
+    }
+    if (states & D3D12_RESOURCE_STATE_COPY_SOURCE) {
+        statesStr += " COPY_SOURCE";
+    }
+    if (states & D3D12_RESOURCE_STATE_RESOLVE_DEST) {
+        statesStr += " RESOLVE_DEST";
+    }
+    if (states & D3D12_RESOURCE_STATE_RESOLVE_SOURCE) {
+        statesStr += " RESOLVE_SOURCE";
+    }
+    return statesStr;
+}
+//----------------------------------------------------------------------------//
 size_t getDXGIFormatNumChannels(DXGI_FORMAT format) {
     switch (format) {
         case DXGI_FORMAT_R8_UNORM:
@@ -173,36 +283,36 @@ size_t getDXGIFormatSizeInBytes(DXGI_FORMAT format) {
 //----------------------------------------------------------------------------//
 
 //-==========================================================================-//
-Resource::Resource(Device* device, const ResourceSettings& resourceSettings)
-        : device(device), resourceSettings(resourceSettings) {
+Resource::Resource(Device* device, const ResourceSettings& settings)
+        : device(device), settings(settings) {
 
     std::cerr << "ENTER: Resource::Resource(Device*, const ResourceSettings&)\n";
     auto* d3d12Device = device->getD3D12Device2();
     D3D12_CLEAR_VALUE clearValue{};
     const D3D12_CLEAR_VALUE* optimizedClearValue = nullptr;
-    if (resourceSettings.optimizedClearValue.has_value()) {
-        memcpy(&clearValue, &resourceSettings.optimizedClearValue.value(), sizeof(D3D12_CLEAR_VALUE));
+    if (settings.optimizedClearValue.has_value()) {
+        memcpy(&clearValue, &settings.optimizedClearValue.value(), sizeof(D3D12_CLEAR_VALUE));
         if (clearValue.Format == DXGI_FORMAT_UNKNOWN) {
-            clearValue.Format = resourceSettings.resourceDesc.Format;
+            clearValue.Format = settings.resourceDesc.Format;
         }
         optimizedClearValue = &clearValue;
     }
     ThrowIfFailed(d3d12Device->CreateCommittedResource(
-            &resourceSettings.heapProperties,
-            resourceSettings.heapFlags,
-            &resourceSettings.resourceDesc,
-            resourceSettings.resourceStates,
+            &settings.heapProperties,
+            settings.heapFlags,
+            &settings.resourceDesc,
+            settings.resourceStates,
             optimizedClearValue,
             IID_PPV_ARGS(&resource)));
 
     uint32_t arraySize;
-    if (resourceSettings.resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-        arraySize = resourceSettings.resourceDesc.DepthOrArraySize;
+    if (settings.resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+        arraySize = settings.resourceDesc.DepthOrArraySize;
     } else {
         arraySize = 1;
     }
-    auto formatPlaneCount = uint32_t(D3D12GetFormatPlaneCount(d3d12Device, resourceSettings.resourceDesc.Format));
-    numSubresources = uint32_t(resourceSettings.resourceDesc.MipLevels) * arraySize * formatPlaneCount;
+    auto formatPlaneCount = uint32_t(D3D12GetFormatPlaneCount(d3d12Device, settings.resourceDesc.Format));
+    numSubresources = uint32_t(settings.resourceDesc.MipLevels) * arraySize * formatPlaneCount;
     std::cerr << "LEAVE: Resource::Resource(Device*, const ResourceSettings&)\n";
 }
 //----------------------------------------------------------------------------//
@@ -234,7 +344,8 @@ void Resource::unmap(size_t writtenRangeBegin, size_t writtenRangeEnd) {
 void Resource::uploadDataLinear(size_t sizeInBytesData, const void* dataPtr) {
     std::cerr << "ENTER: Resource::uploadDataLinear(size_t, const void*)\n";
     size_t intermediateSizeInBytes;
-    if (resourceSettings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+    if (settings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+        std::cerr << "  Resource is a buffer.\n";
         intermediateSizeInBytes = sizeInBytesData;
         if (sizeInBytesData > getCopiableSizeInBytes()) {
             sgl::Logfile::get()->throwError(
@@ -242,8 +353,10 @@ void Resource::uploadDataLinear(size_t sizeInBytesData, const void* dataPtr) {
                     "The copy source is larger than the destination buffer.");
         }
     } else {
+        std::cerr << "  Resource is a texture.\n";
         intermediateSizeInBytes = getCopiableSizeInBytes();
-        if (sizeInBytesData > getRowSizeInBytes() * resourceSettings.resourceDesc.Height * resourceSettings.resourceDesc.DepthOrArraySize) {
+        std::cerr << "  Copiable size in bytes: " << intermediateSizeInBytes << "\n";
+        if (sizeInBytesData > getRowSizeInBytes() * settings.resourceDesc.Height * settings.resourceDesc.DepthOrArraySize) {
             sgl::Logfile::get()->throwError(
                     "Error in Resource::readBackDataInternal: "
                     "The copy source is larger than the destination texture.");
@@ -286,28 +399,28 @@ void Resource::uploadDataLinearInternal(
     auto* d3d12CommandList = cmdList->getD3D12GraphicsCommandListPtr();
     D3D12_SUBRESOURCE_DATA subresourceData = {};
     subresourceData.pData = dataPtr;
-    if (resourceSettings.resourceDesc.Height <= 1 && resourceSettings.resourceDesc.DepthOrArraySize <= 1) {
+    if (settings.resourceDesc.Height <= 1 && settings.resourceDesc.DepthOrArraySize <= 1) {
         // 1D data (no pitches necessary).
         subresourceData.RowPitch = LONG_PTR(sizeInBytesData);
         subresourceData.SlicePitch = subresourceData.RowPitch;
-    } else if (resourceSettings.resourceDesc.DepthOrArraySize <= 1) {
+    } else if (settings.resourceDesc.DepthOrArraySize <= 1) {
         // 2D data (no slice pitch necessary).
         subresourceData.RowPitch = LONG_PTR(getRowSizeInBytes());
-        subresourceData.SlicePitch = subresourceData.RowPitch * LONG_PTR(resourceSettings.resourceDesc.Width);
+        subresourceData.SlicePitch = subresourceData.RowPitch * LONG_PTR(settings.resourceDesc.Width);
     } else {
         // 3D Data.
         subresourceData.RowPitch = LONG_PTR(getRowSizeInBytes());
-        subresourceData.SlicePitch = subresourceData.RowPitch * LONG_PTR(resourceSettings.resourceDesc.Width * resourceSettings.resourceDesc.Height);
+        subresourceData.SlicePitch = subresourceData.RowPitch * LONG_PTR(settings.resourceDesc.Width * settings.resourceDesc.Height);
     }
 
     queryCopiableFootprints();
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT& layout = subresourceLayoutArray.at(0);
-    UINT64 rowSizeInBytes = subresourceRowSizeInBytesArray.at(0);
-    UINT numRows = subresourceNumRowsArray.at(0);
-    UINT64 totalSize = subresourceTotalBytesArray.at(0);
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT& layout = _subLayout.at(0);
+    UINT64 rowSize = _subRowSize.at(0);
+    UINT numRows = _subNumRows.at(0);
+    UINT64 totalSize = _subTotalSize.at(0);
     UpdateSubresources(
             d3d12CommandList, getD3D12ResourcePtr(), intermediateResource, 0, 1,
-            totalSize, &layout, &numRows, &rowSizeInBytes, &subresourceData);
+            totalSize, &layout, &numRows, &rowSize, &subresourceData);
     std::cerr << "LEAVE: Resource::uploadDataLinearInternal(size_t, const void*, ID3D12Resource*, CommandList*)\n";
 }
 //----------------------------------------------------------------------------//
@@ -317,16 +430,16 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
                 "Error in Resource::readBackDataInternal: "
                 "The function only supports for resources with one single subresource.");
     }
-    if (resourceSettings.resourceDesc.SampleDesc.Count > 1) {
+    if (settings.resourceDesc.SampleDesc.Count > 1) {
         sgl::Logfile::get()->throwError(
                 "Error in Resource::readBackDataInternal: "
                 "The function does not support multi-sampled resources.");
     }
 
-    size_t rowSizeInBytes = 0;
+    size_t rowSize = 0;
     size_t srcRowPitch;
     size_t intermediateSizeInBytes;
-    if (resourceSettings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+    if (settings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
         srcRowPitch = sizeInBytesData;
         intermediateSizeInBytes = srcRowPitch;
         if (sizeInBytesData > getCopiableSizeInBytes()) {
@@ -335,16 +448,16 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
                     "The copy destination is larger than the source buffer.");
         }
     } else {
-        rowSizeInBytes = getRowSizeInBytes();
+        rowSize = getRowSizeInBytes();
         srcRowPitch = getRowPitchInBytes();
         intermediateSizeInBytes = srcRowPitch;
-        if (resourceSettings.resourceDesc.Height > 1) {
-            intermediateSizeInBytes *= resourceSettings.resourceDesc.Height;
+        if (settings.resourceDesc.Height > 1) {
+            intermediateSizeInBytes *= settings.resourceDesc.Height;
         }
-        if (resourceSettings.resourceDesc.DepthOrArraySize > 1) {
-            intermediateSizeInBytes *= resourceSettings.resourceDesc.DepthOrArraySize;
+        if (settings.resourceDesc.DepthOrArraySize > 1) {
+            intermediateSizeInBytes *= settings.resourceDesc.DepthOrArraySize;
         }
-        if (sizeInBytesData > rowSizeInBytes * resourceSettings.resourceDesc.Height * resourceSettings.resourceDesc.DepthOrArraySize) {
+        if (sizeInBytesData > rowSize * settings.resourceDesc.Height * settings.resourceDesc.DepthOrArraySize) {
             sgl::Logfile::get()->throwError(
                     "Error in Resource::readBackDataInternal: "
                     "The copy destination is larger than the source texture.");
@@ -365,16 +478,16 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
 
     device->runOnce([&](CommandList* cmdList){
         auto* d3d12CommandList = cmdList->getD3D12GraphicsCommandListPtr();
-        if (resourceSettings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+        if (settings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
             d3d12CommandList->CopyBufferRegion(
                     intermediateResource.Get(), 0, resource.Get(), 0, sizeInBytesData);
         } else {
             D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
-            bufferFootprint.Footprint.Width = static_cast<UINT>(resourceSettings.resourceDesc.Width);
-            bufferFootprint.Footprint.Height = resourceSettings.resourceDesc.Height;
-            bufferFootprint.Footprint.Depth = resourceSettings.resourceDesc.DepthOrArraySize;
+            bufferFootprint.Footprint.Width = static_cast<UINT>(settings.resourceDesc.Width);
+            bufferFootprint.Footprint.Height = settings.resourceDesc.Height;
+            bufferFootprint.Footprint.Depth = settings.resourceDesc.DepthOrArraySize;
             bufferFootprint.Footprint.RowPitch = static_cast<UINT>(srcRowPitch);
-            bufferFootprint.Footprint.Format = resourceSettings.resourceDesc.Format;
+            bufferFootprint.Footprint.Format = settings.resourceDesc.Format;
 
             const CD3DX12_TEXTURE_COPY_LOCATION Dst(intermediateResource.Get(), bufferFootprint);
             const CD3DX12_TEXTURE_COPY_LOCATION Src(resource.Get(), 0);
@@ -394,39 +507,39 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
     memcpyDest.pData = dataPtr;
     D3D12_SUBRESOURCE_DATA subresourceSrc{};
     subresourceSrc.pData = intermediateDataPtr;
-    if (resourceSettings.resourceDesc.Height <= 1 && resourceSettings.resourceDesc.DepthOrArraySize <= 1) {
+    if (settings.resourceDesc.Height <= 1 && settings.resourceDesc.DepthOrArraySize <= 1) {
         // 1D data (no pitches necessary).
         memcpyDest.RowPitch = SIZE_T(sizeInBytesData);
         memcpyDest.SlicePitch = memcpyDest.RowPitch;
         subresourceSrc.RowPitch = LONG_PTR(sizeInBytesData);
         subresourceSrc.SlicePitch = subresourceSrc.RowPitch;
-    } else if (resourceSettings.resourceDesc.DepthOrArraySize <= 1) {
+    } else if (settings.resourceDesc.DepthOrArraySize <= 1) {
         // 2D data (no slice pitch necessary).
-        memcpyDest.RowPitch = SIZE_T(rowSizeInBytes);
-        memcpyDest.SlicePitch = memcpyDest.RowPitch * SIZE_T(resourceSettings.resourceDesc.Width);
+        memcpyDest.RowPitch = SIZE_T(rowSize);
+        memcpyDest.SlicePitch = memcpyDest.RowPitch * SIZE_T(settings.resourceDesc.Width);
         subresourceSrc.RowPitch = LONG_PTR(srcRowPitch);
-        subresourceSrc.SlicePitch = subresourceSrc.RowPitch * LONG_PTR(resourceSettings.resourceDesc.Width);
+        subresourceSrc.SlicePitch = subresourceSrc.RowPitch * LONG_PTR(settings.resourceDesc.Width);
     } else {
         // 3D Data.
-        memcpyDest.RowPitch = SIZE_T(rowSizeInBytes);
-        memcpyDest.SlicePitch = memcpyDest.RowPitch * SIZE_T(resourceSettings.resourceDesc.Width * resourceSettings.resourceDesc.Height);
+        memcpyDest.RowPitch = SIZE_T(rowSize);
+        memcpyDest.SlicePitch = memcpyDest.RowPitch * SIZE_T(settings.resourceDesc.Width * settings.resourceDesc.Height);
         subresourceSrc.RowPitch = LONG_PTR(srcRowPitch);
-        memcpyDest.SlicePitch = subresourceSrc.RowPitch * LONG_PTR(resourceSettings.resourceDesc.Width * resourceSettings.resourceDesc.Height);
+        memcpyDest.SlicePitch = subresourceSrc.RowPitch * LONG_PTR(settings.resourceDesc.Width * settings.resourceDesc.Height);
     }
     MemcpySubresource(
-            &memcpyDest, &subresourceSrc, memcpyDest.RowPitch, resourceSettings.resourceDesc.Height,
-            resourceSettings.resourceDesc.DepthOrArraySize);
+            &memcpyDest, &subresourceSrc, memcpyDest.RowPitch, settings.resourceDesc.Height,
+            settings.resourceDesc.DepthOrArraySize);
     intermediateResource->Unmap(0, &writtenRange);
 }
 //----------------------------------------------------------------------------//
 void Resource::transition(
         D3D12_RESOURCE_STATES stateAfter, const CommandListPtr& cmdList) {
-    transition(resourceSettings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
+    transition(settings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
 }
 //----------------------------------------------------------------------------//
 void Resource::transition(
         D3D12_RESOURCE_STATES stateAfter, CommandList* cmdList) {
-    transition(resourceSettings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
+    transition(settings.resourceStates, stateAfter, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, cmdList);
 }
 //----------------------------------------------------------------------------//
 void Resource::transition(
@@ -457,7 +570,7 @@ void Resource::transition(
     resourceBarrier.Transition.StateBefore = stateBefore;
     resourceBarrier.Transition.StateAfter = stateAfter;
     d3d12GraphicsCommandList->ResourceBarrier(1, &resourceBarrier);
-    resourceSettings.resourceStates = stateAfter;
+    settings.resourceStates = stateAfter;
 }
 //----------------------------------------------------------------------------//
 void Resource::barrierUAV(const CommandListPtr& cmdList) {
@@ -477,53 +590,70 @@ size_t Resource::getAllocationSizeInBytes() {
     auto* d3d12Device = device->getD3D12Device2();
 #if defined(_MSC_VER) || !defined(_WIN32)
     D3D12_RESOURCE_ALLOCATION_INFO allocationInfo = d3d12Device->GetResourceAllocationInfo(
-            0, 1, &resourceSettings.resourceDesc);
+            0, 1, &settings.resourceDesc);
 #else
     D3D12_RESOURCE_ALLOCATION_INFO allocationInfo{};
     d3d12Device->GetResourceAllocationInfo(
-            &allocationInfo, 0, 1, &resourceSettings.resourceDesc);
+            &allocationInfo, 0, 1, &settings.resourceDesc);
 #endif
     return allocationInfo.SizeInBytes;
 }
 //----------------------------------------------------------------------------//
 void Resource::queryCopiableFootprints() {
-    if (!subresourceLayoutArray.empty()) {
-        return;
-    }
+    if (!_subLayout.empty()) return;
+    std::cerr << "ENTER: Resource::queryCopiableFootprints()\n";
     auto* d3d12Device = device->getD3D12Device2();
     uint32_t numEntries = std::max(numSubresources, uint32_t(1));
-    subresourceLayoutArray.resize(numEntries);
-    subresourceNumRowsArray.resize(numEntries);
-    subresourceRowSizeInBytesArray.resize(numEntries);
-    subresourceTotalBytesArray.resize(numEntries);
+    std::cerr << "  Number of subresource entries: " << numEntries << "\n";
+    _subLayout.resize(numEntries);
+    _subNumRows.resize(numEntries);
+    _subRowSize.resize(numEntries);
+    _subTotalSize.resize(numEntries);
     d3d12Device->GetCopyableFootprints(
-           &resourceSettings.resourceDesc, 0, numEntries, 0,
-           subresourceLayoutArray.data(), subresourceNumRowsArray.data(),
-           subresourceRowSizeInBytesArray.data(), subresourceTotalBytesArray.data());
+           &settings.resourceDesc, 0, numEntries, 0,
+           _subLayout.data(),_subNumRows.data(),
+           _subRowSize.data(),_subTotalSize.data());
+    for (uint32_t i = 0; i < numEntries; ++i) {
+        auto& layout = _subLayout.at(i);
+        std::cout << std::format("    {}: Offset={}, Footprint=(Format={}, "
+                                 "Width={}, Height={}, Depth={}, RowPitch={})"
+                                 "  # Rows={}  Row Size={}  Total Bytes={}\n",
+                                 i, layout.Offset,
+                                 static_cast<uint32_t>(layout.Footprint.Format),
+                                 layout.Footprint.Width,
+                                 layout.Footprint.Height,
+                                 layout.Footprint.Depth,
+                                 layout.Footprint.RowPitch,
+                                 _subNumRows.at(i),
+                                 _subRowSize.at(i),
+                                 _subTotalSize.at(i));
+    }
+    
+    std::cerr << "LEAVE: Resource::queryCopiableFootprints()\n";
 }
 //----------------------------------------------------------------------------//
 size_t Resource::getCopiableSizeInBytes() {
     queryCopiableFootprints();
-    return size_t(subresourceTotalBytesArray.at(0));
+    return size_t(_subTotalSize.at(0));
 }
 //----------------------------------------------------------------------------//
 size_t Resource::getNumRows() {
     queryCopiableFootprints();
-    return size_t(subresourceNumRowsArray.at(0));
+    return size_t(_subNumRows.at(0));
 }
 //----------------------------------------------------------------------------//
 size_t Resource::getRowSizeInBytes() {
     queryCopiableFootprints();
-    return size_t(subresourceRowSizeInBytesArray.at(0));
+    return size_t(_subRowSize.at(0));
 }
 //----------------------------------------------------------------------------//
 size_t Resource::getRowPitchInBytes() {
     queryCopiableFootprints();
-    size_t rowSizeInBytes = getRowSizeInBytes();
-    if (rowSizeInBytes % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0) {
-        return rowSizeInBytes;
+    size_t rowSize = getRowSizeInBytes();
+    if (rowSize % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0) {
+        return rowSize;
     }
-    return sgl::sizeceil(rowSizeInBytes, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+    return sgl::sizeceil(rowSize, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
 }
 //----------------------------------------------------------------------------//
 D3D12_GPU_VIRTUAL_ADDRESS Resource::getGPUVirtualAddress() {
@@ -556,22 +686,47 @@ void Resource::print() {
     }
     else std::cout << "  Device  : NOT SET\n";
 
-    uint32_t dim = 0;
+    uint32_t dim = getDimensions(settings.resourceDesc.Dimension);
+    std::string resourceFlags  = getResourceFlags(settings.resourceFlags);
+    std::string heapFlags      = getHeapFlags(settings.heapFlags);
+    std::string resourceStates = getResourceStates(settings.resourceStates);
+    std::string layout         = getTextureLayout(settings.resourceDesc.Layout);
 
+    DXGI_SAMPLE_DESC SampleDesc;
+    D3D12_TEXTURE_LAYOUT Layout;
+    D3D12_RESOURCE_FLAGS Flags;
     std::cout << "  Settings:\n";
-    // std::cout << std::format("    Resourse flags : {}\n", resourceSettings.resourceFlags);
-    // std::cout << std::format("    Heap     flags : {}\n", resourceSettings.heapFlags);
-    // std::cout << std::format("    Resourse states: {}\n", resourceSettings.resourceStates);
-    std::cout << std::format("    Dimensions     : {}\n", getDimensions(resourceSettings.resourceDesc.Dimension));
-    std::cout << std::format("    Width          : {}\n", resourceSettings.resourceDesc.Width);
-    std::cout << std::format("    Height         : {}\n", resourceSettings.resourceDesc.Height);
-    std::cout << std::format("    Depth/Arraysize: {}\n", resourceSettings.resourceDesc.DepthOrArraySize);
-    std::cout << std::format("    Alignment      : {}\n", resourceSettings.resourceDesc.Alignment);
-    std::cout << std::format("    Mip Levels     : {}\n", resourceSettings.resourceDesc.MipLevels);
-    std::cout << std::format("    Format         : {}\n", static_cast<uint32_t>(resourceSettings.resourceDesc.Format));
-    // std::cout << std::format("    Sample desc.   : {}\n", resourceSettings.resourceDesc.SampleDesc);
-    std::cout << std::format("    Layout         : {}\n", getTextureLayout(resourceSettings.resourceDesc.Layout));
-    // std::cout << std::format("    Desc. flags    : {}\n", resourceSettings.resourceDesc.Flags);
+    std::cout << std::format("    Resourse flags : {}\n", resourceFlags);
+    std::cout << std::format("    Heap     flags : {}\n", heapFlags);
+    std::cout << std::format("    Resourse states: {}\n", resourceStates);
+    std::cout << std::format("    Dimensions     : {}\n", dim);
+    std::cout << std::format("    Width          : {}\n", settings.resourceDesc.Width);
+    std::cout << std::format("    Height         : {}\n", settings.resourceDesc.Height);
+    std::cout << std::format("    Depth/Arraysize: {}\n", settings.resourceDesc.DepthOrArraySize);
+    std::cout << std::format("    Alignment      : {}\n", settings.resourceDesc.Alignment);
+    std::cout << std::format("    Mip Levels     : {}\n", settings.resourceDesc.MipLevels);
+    std::cout << std::format("    Format         : {}\n", static_cast<uint32_t>(settings.resourceDesc.Format));
+    std::cout << std::format("    Sample desc.   : {} multisamples\n", settings.resourceDesc.SampleDesc.Count);
+    std::cout << std::format("                     {} quality\n", settings.resourceDesc.SampleDesc.Quality);
+    std::cout << std::format("    Layout         : {}\n", layout);
+    std::cout << std::format("    Desc. flags    : {}\n", getResourceFlags(settings.resourceDesc.Flags));
+    std::cout << std::format("    Subresources   : {}\n", numSubresources);
+    for (uint32_t i = 0; i < numSubresources; ++i) {
+        auto& layout = _subLayout.at(i);
+        std::cout << std::format("    {}: Offset={}, Footprint=(Format={}, "
+                                 "Width={}, Height={}, Depth={}, RowPitch={})"
+                                 "  # Rows={}  Row Size={}  Total Bytes={}\n",
+                                 i, layout.Offset,
+                                 static_cast<uint32_t>(layout.Footprint.Format),
+                                 layout.Footprint.Width,
+                                 layout.Footprint.Height,
+                                 layout.Footprint.Depth,
+                                 layout.Footprint.RowPitch,
+                                 _subNumRows.at(i),
+                                 _subRowSize.at(i),
+                                 _subTotalSize.at(i));
+    }
 }
 //-==========================================================================-//
+
 }}

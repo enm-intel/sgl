@@ -89,7 +89,7 @@ private:
     // Device information (retrieved from adapter).
     std::string adapterName;
     uint32_t vendorId;
-    uint32_t adapterLuid;
+    uint64_t adapterLuid;
 };
 
 }}
