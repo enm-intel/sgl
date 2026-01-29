@@ -31,6 +31,8 @@
 
 #include <sycl/sycl.hpp>
 
+namespace syclexp = sycl::ext::oneapi::experimental;
+
 namespace sgl {
 extern bool openMessageBoxOnComputeApiError;
 extern sycl::queue* g_syclQueue;
