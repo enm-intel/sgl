@@ -110,10 +110,22 @@ sycl::event _writeTestImg(sycl::queue &q, sycl_unsamp_img img,
         cgh.parallel_for(sycl::range<2>{w, h}, [=](sycl::id<2> it) {
             const auto x = it[0];
             const auto y = it[1];
-            const size_t val = x + y * w;
-            sycl::vec<T, C> data;
-            for (uint32_t c = 0; c < C; c++) data[c] = static_cast<T>(val + c);
-            syclexp::write_image<sycl::vec<T, C>>(img, sycl::int2{x, y}, data);
+            const auto index = (x + y * width) * static_cast<size_t>(C);
+            if constexpr (std::is_same_v<T, sycl::half>) {
+                sycl::vec<uint16_t, C> data;
+                for (int c = 0; c < C; c++) {
+                    data[c] = sycl::bit_cast<uint16_t>(sycl::half(float(index + c)));
+                    //data[c] = sycl::detail::float2Half(index + c); // may not use __SYCL_DEVICE_ONLY__ code path
+                    //data[c] = sycl::half(index + c); // sycl::half constructor doesn't work, converts to float
+                }
+                syclexp::write_image<sycl::vec<uint16_t, C>>(img, sycl::int2{x, y}, data);
+            } else {
+                sycl::vec<T, C> data;
+                for (int c = 0; c < C; c++) {
+                    data[c] = T(index + c);
+                }
+                syclexp::write_image<sycl::vec<T, C>>(img, sycl::int2{x, y}, data);
+            }
         });
     });
     return event;
