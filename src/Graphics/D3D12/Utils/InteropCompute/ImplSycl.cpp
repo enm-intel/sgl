@@ -354,7 +354,7 @@ void ImageD3D12SyclInterop::importExternalMemoryWin32Handle() {
         }
         throw UnsupportedComputeApiFeatureException("Unsupported SYCL image memory type");
     }
-
+    std::cout << "[SGL]    -- **** Calling syclexp::map_external_image_memory ****\n";
     wrapperImg->memHandle = syclexp::map_external_image_memory(
             wrapperMem->syclExternalMem, imgDesc, *g_syclQueue);
     _mipmap = reinterpret_cast<void*>(wrapperImg);
