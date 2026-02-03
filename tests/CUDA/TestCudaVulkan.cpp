@@ -347,7 +347,7 @@ TEST_P(InteropTestCudaVulkanImageCudaWriteVulkanRead, Formats) {
 
             // Check equality.
             void* hostPtr = stagingBufferVulkan->mapMemory();
-            if (!checkIsArrayLinearTyped(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
+            if (!checkIsArrayLinear(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
                 stagingBufferVulkan->unmapMemory();
                 ASSERT_TRUE(false) << errorMessage;
             }

@@ -65,6 +65,8 @@ public:
     void copyFromHostPtrAsync(void* hostPtrSrc, StreamWrapper stream, void* eventOut = nullptr) override;
     void copyToHostPtrAsync(void* hostPtrDst, StreamWrapper stream, void* eventOut = nullptr) override;
 
+    void print() override;
+
 protected:
     void importExternalMemoryWin32Handle() override;
     void free() override;

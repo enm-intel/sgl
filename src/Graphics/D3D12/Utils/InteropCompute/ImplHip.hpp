@@ -84,6 +84,8 @@ public:
     void copyFromDevicePtrAsync(void* devicePtrSrc, StreamWrapper stream, void* eventOut = nullptr) override;
     void copyToDevicePtrAsync(void* devicePtrDst, StreamWrapper stream, void* eventOut = nullptr) override;
 
+    void print() override;
+
     [[nodiscard]] inline hipMipmappedArray_t getHipMipmappedArray() const { return reinterpret_cast<hipMipmappedArray_t>(mipmappedArray); }
     hipArray_t getHipMipmappedArrayLevel(uint32_t level = 0);
 

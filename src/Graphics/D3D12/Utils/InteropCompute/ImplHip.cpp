@@ -321,7 +321,7 @@ void ImageD3D12HipInterop::importExternalMemoryWin32Handle() {
         externalMemoryMipmappedArrayDesc.extent.height = static_cast<size_t>(resourceDesc.Height);
     }
     externalMemoryMipmappedArrayDesc.extent.depth = resourceDesc.DepthOrArraySize;
-    externalMemoryMipmappedArrayDesc.numLevels = uint32_t(getDXGIFormatNumChannels(resourceDesc.Format));
+    externalMemoryMipmappedArrayDesc.numLevels = getNumChannels(resourceDesc.Format);
     getHipFormatDescFromD3D12Format(resourceDesc.Format, externalMemoryMipmappedArrayDesc.formatDesc);
     externalMemoryMipmappedArrayDesc.flags = 0;
 
@@ -383,7 +383,7 @@ hipArray_t ImageD3D12HipInterop::getHipMipmappedArrayLevel(uint32_t level) {
 void ImageD3D12HipInterop::copyFromDevicePtrAsync(
         void* devicePtrSrc, StreamWrapper stream, void* eventOut) {
     const auto& resourceDesc = resource->getD3D12ResourceDesc();
-    size_t entryByteSize = getDXGIFormatSizeInBytes(resourceDesc.Format);
+    size_t entryByteSize = getFormatSize(resourceDesc.Format);
     if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
         if (!g_hipDeviceApiFunctionTable.hipMemcpy2DToArrayAsync) {
             throw UnsupportedComputeApiFeatureException("HIP does not support 2D image copies");
@@ -420,7 +420,7 @@ void ImageD3D12HipInterop::copyFromDevicePtrAsync(
 void ImageD3D12HipInterop::copyToDevicePtrAsync(
         void* devicePtrDst, StreamWrapper stream, void* eventOut) {
     const auto& resourceDesc = resource->getD3D12ResourceDesc();
-    size_t entryByteSize = getDXGIFormatSizeInBytes(resourceDesc.Format);
+    size_t entryByteSize = getFormatSize(resourceDesc.Format);
     if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
         if (!g_hipDeviceApiFunctionTable.hipMemcpy2DFromArrayAsync) {
             throw UnsupportedComputeApiFeatureException("HIP does not support 2D image copies");
@@ -454,6 +454,12 @@ void ImageD3D12HipInterop::copyToDevicePtrAsync(
     }
 }
 
+void ImageD3D12HipInterop::print() {
+    std::cerr << "[SGL] ENTER: ImageD3D12HipInterop::print()\n";
+    // if (resource) resource->print();
+    // std::cout << "More stuff here!\n");
+    std::cerr << "[SGL] LEAVE: ImageD3D12HipInterop::print()\n";
+}
 
 void UnsampledImageD3D12HipInterop::initialize(const ImageD3D12ComputeApiExternalMemoryPtr& _image) {
     this->image = _image;

@@ -41,6 +41,9 @@ enum class DeviceVendor {
     NVIDIA, AMD, INTEL, UNKNOWN
 };
 
+std::string deviceVendor(DeviceVendor vendor);
+std::string featureLevel(D3D_FEATURE_LEVEL level);
+
 class CommandList;
 typedef std::shared_ptr<CommandList> CommandListPtr;
 
@@ -60,7 +63,7 @@ public:
     [[nodiscard]] inline ComPtr<ID3D12Device2>& getD3D12Device2ComPtr() { return d3d12Device2; }
     [[nodiscard]] inline ID3D12CommandQueue* getD3D12CommandQueueDirect() { return commandQueueDirect.Get(); }
     [[nodiscard]] inline ID3D12CommandQueue* getD3D12CommandQueueCompute() { return commandQueueCompute.Get(); }
-    [[nodiscard]] ID3D12CommandQueue* getD3D12CommandQueue(CommandListType commandListType);
+    [[nodiscard]] ID3D12CommandQueue* getD3D12CommandQueue(CommandListType cmdListType);
 
     void debugMessageCallback(
             D3D12_MESSAGE_CATEGORY Category,
@@ -68,9 +71,8 @@ public:
             D3D12_MESSAGE_ID ID,
             LPCSTR pDescription);
 
-    void runSingleTimeCommands(
-            const std::function<void(CommandList*)>& workFunctor,
-            CommandListType commandListType = CommandListType::DIRECT);
+    void runOnce(const std::function<void(CommandList*)>& func,
+                 CommandListType cmdListType = CommandListType::DIRECT);
 
 private:
     ComPtr<IDXGIAdapter1> dxgiAdapter1;

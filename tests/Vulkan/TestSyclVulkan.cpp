@@ -415,7 +415,7 @@ void InteropTestSyclVk::runTestsImageCopy(VkFormat format, uint32_t width, uint3
     size_t numEntries = imageSettings.width * imageSettings.height * formatInfo.numChannels;
     size_t sizeInBytes = imageSettings.width * imageSettings.height * formatInfo.formatSizeInBytes;
     auto* hostPtr = sycl_malloc_host_typed(formatInfo.channelFormat, numEntries, *syclQueue);
-    initializeHostPointerLinearTyped(formatInfo.channelFormat, numEntries, hostPtr);
+    initHostDataLinear(formatInfo.channelFormat, numEntries, hostPtr);
     imageViewVulkan->getImage()->uploadData(sizeInBytes, hostPtr);
 
     // Copy and wait on CPU.
@@ -430,7 +430,7 @@ void InteropTestSyclVk::runTestsImageCopy(VkFormat format, uint32_t width, uint3
 
     // Check equality.
     std::string errorMessage;
-    if (!checkIsArrayLinearTyped(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
+    if (!checkIsArrayLinear(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
         ASSERT_TRUE(false) << errorMessage;
     }
 
@@ -587,7 +587,7 @@ TEST_P(InteropTestSyclVkImageVulkanWriteSyclRead, Formats) {
             // Upload data to image.
             auto* hostPtr = sycl_malloc_host_typed(formatInfo.channelFormat, numEntries, *syclQueue);
             auto* devicePtr = sycl_malloc_device_typed(formatInfo.channelFormat, numEntries, *syclQueue);
-            initializeHostPointerTyped(formatInfo.channelFormat, numEntries, 42, hostPtr);
+            initHostData(formatInfo.channelFormat, numEntries, 42, hostPtr);
             imageViewVulkan->getImage()->uploadData(sizeInBytes, hostPtr);
 
             // Create command buffer.
@@ -638,14 +638,14 @@ TEST_P(InteropTestSyclVkImageVulkanWriteSyclRead, Formats) {
             }
             syclexp::unsampled_image_handle imageSyclHandle{};
             imageSyclHandle.raw_handle = imageInteropSycl->getRawHandle();
-            sycl::event copyEventImg = copySyclBindlessImageToBuffer(
+            sycl::event copyEventImg = copySyclBindlessImgToBuf(
                     *syclQueue, imageSyclHandle, formatInfo, imageSettings.width, imageSettings.height,
                     devicePtr, waitSemaphoreEvent);
             auto copyEvent = syclQueue->memcpy(hostPtr, devicePtr, sizeInBytes, copyEventImg);
             copyEvent.wait_and_throw();
 
             // Check equality.
-            if (!checkIsArrayLinearTyped(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
+            if (!checkIsArrayLinear(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
                 ASSERT_TRUE(false) << errorMessage;
             }
 
@@ -814,7 +814,7 @@ TEST_P(InteropTestSyclVkImageSyclWriteVulkanRead, Formats) {
             stream.syclQueuePtr = syclQueue;
             syclexp::unsampled_image_handle imageSyclHandle{};
             imageSyclHandle.raw_handle = imageInteropSycl->getRawHandle();
-            sycl::event writeImgEvent = writeSyclBindlessImageIncreasingIndices(
+            sycl::event writeImgEvent = writeSyclBindlessTestImg(
                     *syclQueue, imageSyclHandle, formatInfo, imageSettings.width, imageSettings.height);
             //auto barrierEvent = syclQueue->ext_oneapi_submit_barrier({ writeImgEvent }); // broken
             sycl::event signalSemaphoreEvent{};
@@ -851,7 +851,7 @@ TEST_P(InteropTestSyclVkImageSyclWriteVulkanRead, Formats) {
 
             // Check equality.
             void* hostPtr = stagingBufferVulkan->mapMemory();
-            if (!checkIsArrayLinearTyped(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
+            if (!checkIsArrayLinear(formatInfo, imageSettings.width, imageSettings.height, hostPtr, errorMessage)) {
                 stagingBufferVulkan->unmapMemory();
                 ASSERT_TRUE(false) << errorMessage;
             }

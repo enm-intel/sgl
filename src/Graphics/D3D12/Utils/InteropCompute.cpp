@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream> // for std::cout, std::cerr
+
 #include "Device.hpp"
 #include "Resource.hpp"
 #include "InteropCompute.hpp"
@@ -66,6 +68,7 @@ extern sycl::queue* g_syclQueue;
 
 namespace sgl { namespace d3d12 {
 
+//----------------------------------------------------------------------------//
 InteropComputeApi decideInteropComputeApi(Device* device) {
     InteropComputeApi api = InteropComputeApi::NONE;
 #ifdef SUPPORT_CUDA_INTEROP
@@ -90,7 +93,7 @@ InteropComputeApi decideInteropComputeApi(Device* device) {
 #endif
     return api;
 }
-
+//----------------------------------------------------------------------------//
 FenceD3D12ComputeApiInteropPtr createFenceD3D12ComputeApiInterop(Device* device, uint64_t value) {
     InteropComputeApi interopComputeApi = decideInteropComputeApi(device);
     (void)interopComputeApi;
@@ -123,7 +126,7 @@ FenceD3D12ComputeApiInteropPtr createFenceD3D12ComputeApiInterop(Device* device,
     fence->initialize(device, value);
     return fence;
 }
-
+//----------------------------------------------------------------------------//
 BufferD3D12ComputeApiExternalMemoryPtr createBufferD3D12ComputeApiExternalMemory(sgl::d3d12::ResourcePtr& resource) {
     InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
     (void)interopComputeApi;
@@ -156,7 +159,7 @@ BufferD3D12ComputeApiExternalMemoryPtr createBufferD3D12ComputeApiExternalMemory
     resourceExtMem->initialize(resource);
     return resourceExtMem;
 }
-
+//----------------------------------------------------------------------------//
 ImageD3D12ComputeApiExternalMemoryPtr createImageD3D12ComputeApiExternalMemory(sgl::d3d12::ResourcePtr& resource) {
     InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
     (void)interopComputeApi;
@@ -189,7 +192,7 @@ ImageD3D12ComputeApiExternalMemoryPtr createImageD3D12ComputeApiExternalMemory(s
     resourceExtMem->initialize(resource);
     return resourceExtMem;
 }
-
+//----------------------------------------------------------------------------//
 ImageD3D12ComputeApiExternalMemoryPtr createImageD3D12ComputeApiExternalMemory(
         sgl::d3d12::ResourcePtr& resource, const ImageD3D12ComputeApiInfo& imageComputeApiInfo) {
     InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
@@ -223,22 +226,24 @@ ImageD3D12ComputeApiExternalMemoryPtr createImageD3D12ComputeApiExternalMemory(
     resourceExtMem->initialize(resource, imageComputeApiInfo);
     return resourceExtMem;
 }
+//----------------------------------------------------------------------------//
 
-
+//-==========================================================================-//
 void FenceD3D12ComputeApiInterop::initialize(Device* device, uint64_t value) {
     _initialize(device, value, D3D12_FENCE_FLAG_SHARED);
     handle = getSharedHandle();
     importExternalFenceWin32Handle();
 }
-
+//----------------------------------------------------------------------------//
 void FenceD3D12ComputeApiInterop::freeHandle() {
     if (handle) {
         CloseHandle(handle);
         handle = {};
     }
 }
+//-==========================================================================-//
 
-
+//-==========================================================================-//
 void BufferD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr& _resource) {
     if (devicePtr) {
         free();
@@ -248,44 +253,47 @@ void BufferD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr& _r
     handle = _resource->getSharedHandle();
     importExternalMemoryWin32Handle();
 }
-
+//----------------------------------------------------------------------------//
 void BufferD3D12ComputeApiExternalMemory::freeHandle() {
     if (handle) {
         CloseHandle(handle);
         handle = {};
     }
 }
+//-==========================================================================-//
 
+//-==========================================================================-//
 void ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr& _resource) {
-    if (mipmappedArray) {
-        free();
-    }
+    std::cerr << "[SGL] ENTER: ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr&)\n";
+    if (_mipmap) free();
 
     resource = _resource;
     handle = _resource->getSharedHandle();
     importExternalMemoryWin32Handle();
+    std::cerr << "[SGL] LEAVE: ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr&)\n";
 }
-
+//----------------------------------------------------------------------------//
 void ImageD3D12ComputeApiExternalMemory::initialize(
             sgl::d3d12::ResourcePtr& _resource, const ImageD3D12ComputeApiInfo& _imageComputeApiInfo) {
-    if (mipmappedArray) {
-        free();
-    }
+    std::cerr << "[SGL] ENTER: ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr&, const ImageD3D12ComputeApiInfo&)\n";
+    if (_mipmap) free();
 
     resource = _resource;
     imageComputeApiInfo = _imageComputeApiInfo;
     handle = _resource->getSharedHandle();
     importExternalMemoryWin32Handle();
+    std::cerr << "[SGL] LEAVE: ImageD3D12ComputeApiExternalMemory::initialize(sgl::d3d12::ResourcePtr&, const ImageD3D12ComputeApiInfo&)\n";
 }
-
+//----------------------------------------------------------------------------//
 void ImageD3D12ComputeApiExternalMemory::freeHandle() {
     if (handle) {
         CloseHandle(handle);
         handle = {};
     }
 }
+//-==========================================================================-//
 
-
+//----------------------------------------------------------------------------//
 UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeApiExternalMemory(
         sgl::d3d12::ResourcePtr& resource) {
     [[maybe_unused]] InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
@@ -320,7 +328,7 @@ UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeA
     unsampledImageExtMem->initialize(imageExtMem);
     return unsampledImageExtMem;
 }
-
+//----------------------------------------------------------------------------//
 UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeApiExternalMemory(
         sgl::d3d12::ResourcePtr& resource, const ImageD3D12ComputeApiInfo& imageComputeApiInfo) {
     if (imageComputeApiInfo.useSampledImage) {
@@ -361,7 +369,7 @@ UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeA
     unsampledImageExtMem->initialize(imageExtMem);
     return unsampledImageExtMem;
 }
-
+//----------------------------------------------------------------------------//
 UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeApiExternalMemory(
         const ImageD3D12ComputeApiExternalMemoryPtr& imageExtMem) {
     [[maybe_unused]] InteropComputeApi interopComputeApi = decideInteropComputeApi(imageExtMem->getResource()->getDevice());
@@ -395,8 +403,7 @@ UnsampledImageD3D12ComputeApiExternalMemoryPtr createUnsampledImageD3D12ComputeA
     unsampledImageExtMem->initialize(imageExtMem);
     return unsampledImageExtMem;
 }
-
-
+//----------------------------------------------------------------------------//
 SampledImageD3D12ComputeApiExternalMemoryPtr createSampledImageD3D12ComputeApiExternalMemory(
         sgl::d3d12::ResourcePtr& resource, const ImageD3D12ComputeApiInfo& imageComputeApiInfo) {
     [[maybe_unused]] InteropComputeApi interopComputeApi = decideInteropComputeApi(resource->getDevice());
@@ -427,7 +434,7 @@ SampledImageD3D12ComputeApiExternalMemoryPtr createSampledImageD3D12ComputeApiEx
     sampledImageExtMem->initialize(imageExtMem, imageComputeApiInfo.textureExternalMemorySettings);
     return sampledImageExtMem;
 }
-
+//----------------------------------------------------------------------------//
 SampledImageD3D12ComputeApiExternalMemoryPtr createSampledImageD3D12ComputeApiExternalMemory(
         sgl::d3d12::ResourcePtr& resource, const D3D12_SAMPLER_DESC& samplerDesc,
         const TextureExternalMemorySettings& textureExternalMemorySettings) {
@@ -439,5 +446,5 @@ SampledImageD3D12ComputeApiExternalMemoryPtr createSampledImageD3D12ComputeApiEx
     imageComputeApiInfo.textureExternalMemorySettings = textureExternalMemorySettings;
     return createSampledImageD3D12ComputeApiExternalMemory(resource, imageComputeApiInfo);
 }
-
+//----------------------------------------------------------------------------//
 }}

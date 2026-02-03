@@ -79,6 +79,10 @@ public:
     void copyFromDevicePtrAsync(void* devicePtrSrc, StreamWrapper stream, void* eventOut = nullptr) override;
     void copyToDevicePtrAsync(void* devicePtrDst, StreamWrapper stream, void* eventOut = nullptr) override;
 
+    void print() override;
+
+    const void *externalMem() const { return externalMemory; }
+
 protected:
     void importExternalMemoryWin32Handle() override;
     void free() override;

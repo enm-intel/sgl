@@ -32,6 +32,8 @@
 #ifdef SUPPORT_SYCL_INTEROP
 #include <sycl/sycl.hpp>
 #include <sycl/ext/oneapi/backend/level_zero.hpp>
+
+namespace syclexp = sycl::ext::oneapi::experimental;
 #endif
 
 namespace sgl {
@@ -395,7 +397,7 @@ static void getZeImageFormatFromD3D12Format(DXGI_FORMAT format, ze_image_format_
         sgl::Logfile::get()->throwError("Error in getZeImageFormatFromVkFormat: Unsupported swizzle.");
         return;
     }
-    size_t numChannels = getDXGIFormatNumChannels(format);
+    uint32_t numChannels = getNumChannels(format);
     // TODO: Check if this is what we expect.
     if (numChannels == 3) {
         zeFormat.w = ZE_IMAGE_FORMAT_SWIZZLE_1;
@@ -481,7 +483,7 @@ void ImageD3D12LevelZeroInterop::importExternalMemoryWin32Handle() {
 
     ze_result_t zeResult;
     if (g_useBindlessImagesInterop) {
-        auto elementSizeInBytes = uint32_t(sgl::d3d12::getDXGIFormatSizeInBytes(resourceDesc.Format));
+        auto elementSizeInBytes = uint32_t(sgl::d3d12::getFormatSize(resourceDesc.Format));
         size_t rowPitch = 0;
         zeResult = g_levelZeroFunctionTable.zeMemGetPitchFor2dImage(
                g_zeContext, g_zeDevice, static_cast<uint32_t>(resourceDesc.Width), static_cast<uint32_t>(resourceDesc.Height), elementSizeInBytes, &rowPitch);
@@ -583,6 +585,13 @@ void ImageD3D12LevelZeroInterop::copyToDevicePtrAsync(
             stream.zeCommandList, devicePtrDst, imageHandle, &srcRegion,
             g_zeSignalEvent, g_numWaitEvents, g_zeWaitEvents);
     checkZeResult(zeResult, "Error in zeCommandListAppendImageCopyFromMemory: ");
+}
+
+void ImageD3D12LevelZeroInterop::print() {
+    std::cerr << "[SGL] ENTER: ImageD3D12LevelZeroInterop::print()\n";
+    // if (resource) resource->print();
+    // std::cout << "More stuff here!\n");
+    std::cerr << "[SGL] LEAVE: ImageD3D12LevelZeroInterop::print()\n";
 }
 
 }}

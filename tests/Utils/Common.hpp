@@ -33,10 +33,10 @@
 
 #include <Graphics/Utils/FormatInfo.hpp>
 
-void initializeHostPointerTyped(sgl::ChannelFormat channelFormat, size_t numEntries, int value, void* ptr);
-void initializeHostPointerLinearTyped(sgl::ChannelFormat channelFormat, size_t numEntries, void* ptr);
+void initHostData(sgl::ChannelFormat channelFormat, size_t numEntries, int value, void* ptr);
+void initHostDataLinear(sgl::ChannelFormat channelFormat, size_t numEntries, void* ptr);
 
-bool checkIsArrayLinearTyped(
+bool checkIsArrayLinear(
         const sgl::FormatInfo& formatInfo, size_t width, size_t height, void* ptr, std::string& errorMessage);
 
 #endif //SGL_COMMON_HPP

@@ -270,7 +270,7 @@ std::string getDxgiFormatString(const T& info) {
     uint32_t width = std::get<1>(info.param);
     uint32_t height = std::get<2>(info.param);
     auto formatString = sgl::d3d12::convertDXGIFormatToString(format);
-    if (width != height || (sgl::d3d12::getDXGIFormatChannelSizeInBytes(format) == 4 && (width != 1024 || height != 1024))) {
+    if (width != height || (sgl::d3d12::getChannelSize(format) == 4 && (width != 1024 || height != 1024))) {
         formatString += "_" + std::to_string(width) + "x" + std::to_string(height);
     }
     return formatString;
@@ -296,7 +296,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageCopyTest) {
     }
     const auto [format, width, height] = GetParam();
 
-    auto formatInfo = sgl::d3d12::getDXGIFormatInfo(format);
+    auto formatInfo = sgl::d3d12::getFormatInfo(format);
     size_t numEntries = width * height * formatInfo.numChannels;
     size_t sizeInBytes = width * height * formatInfo.formatSizeInBytes;
 
@@ -315,7 +315,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageCopyTest) {
 
     // Upload data to image.
     auto* hostPtr = sycl_malloc_host_typed(formatInfo.channelFormat, numEntries, *syclQueue);
-    initializeHostPointerLinearTyped(formatInfo.channelFormat, numEntries, hostPtr);
+    initHostDataLinear(formatInfo.channelFormat, numEntries, hostPtr);
     imageD3D12->uploadDataLinear(sizeInBytes, hostPtr);
 
     size_t imgRowPitch = imageD3D12->getRowPitchInBytes();
@@ -336,7 +336,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageCopyTest) {
 
     // Check equality.
     std::string errorMessage;
-    if (!checkIsArrayLinearTyped(formatInfo, width, height, hostPtr, errorMessage)) {
+    if (!checkIsArrayLinear(formatInfo, width, height, hostPtr, errorMessage)) {
         ASSERT_TRUE(false) << errorMessage;
     }
 
@@ -366,7 +366,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageD3D12WriteSyclReadTests) {
     auto* shaderManager = new sgl::d3d12::ShaderManagerD3D12();
     auto* renderer = new sgl::d3d12::Renderer(d3d12Device.get());
 
-    auto formatInfo = sgl::d3d12::getDXGIFormatInfo(format);
+    auto formatInfo = sgl::d3d12::getFormatInfo(format);
     size_t numEntries = width * height * formatInfo.numChannels;
     size_t sizeInBytes = width * height * formatInfo.formatSizeInBytes;
 
@@ -448,7 +448,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageD3D12WriteSyclReadTests) {
         // Upload data to image.
         auto* hostPtr = sycl_malloc_host_typed(formatInfo.channelFormat, numEntries, *syclQueue);
         auto* devicePtr = sycl_malloc_device_typed(formatInfo.channelFormat, numEntries, *syclQueue);
-        initializeHostPointerTyped(formatInfo.channelFormat, numEntries, 42, hostPtr);
+        initHostData(formatInfo.channelFormat, numEntries, 42, hostPtr);
         imageD3D12->uploadDataLinear(sizeInBytes, hostPtr);
 
         // Write new data with D3D12.
@@ -471,14 +471,14 @@ TEST_P(InteropTestSyclD3D12Image, ImageD3D12WriteSyclReadTests) {
         fence->waitFenceComputeApi(stream, timelineValue, &waitSemaphoreEvent);
         syclexp::unsampled_image_handle imageSyclHandle{};
         imageSyclHandle.raw_handle = imageInteropSycl->getRawHandle();
-        sycl::event copyEventImg = copySyclBindlessImageToBuffer(
+        sycl::event copyEventImg = copySyclBindlessImgToBuf(
                 *syclQueue, imageSyclHandle, formatInfo, width, height, devicePtr, waitSemaphoreEvent);
         auto copyEvent = syclQueue->memcpy(hostPtr, devicePtr, sizeInBytes, copyEventImg);
         copyEvent.wait_and_throw();
 
         // Check equality.
         std::string errorMessage;
-        if (!checkIsArrayLinearTyped(formatInfo, width, height, hostPtr, errorMessage)) {
+        if (!checkIsArrayLinear(formatInfo, width, height, hostPtr, errorMessage)) {
             descriptorAllocationUAV = {};
             delete shaderManager;
             delete renderer;
@@ -516,7 +516,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageSyclWriteD3D12ReadTests) {
         GTEST_SKIP() << "D3D12 does not support RWBuffer into this format.";
     }
 
-    auto formatInfo = sgl::d3d12::getDXGIFormatInfo(format);
+    auto formatInfo = sgl::d3d12::getFormatInfo(format);
     size_t numEntries = width * height * formatInfo.numChannels;
     size_t sizeInBytes = width * height * formatInfo.formatSizeInBytes;
 
@@ -610,7 +610,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageSyclWriteD3D12ReadTests) {
         stream.syclQueuePtr = syclQueue;
         syclexp::unsampled_image_handle imageSyclHandle{};
         imageSyclHandle.raw_handle = imageInteropSycl->getRawHandle();
-        sycl::event writeImgEvent = writeSyclBindlessImageIncreasingIndices(
+        sycl::event writeImgEvent = writeSyclBindlessTestImg(
                 *syclQueue, imageSyclHandle, formatInfo, width, height);
         //auto barrierEvent = syclQueue->ext_oneapi_submit_barrier({ writeImgEvent }); // broken
         sycl::event signalSemaphoreEvent{};
@@ -638,7 +638,7 @@ TEST_P(InteropTestSyclD3D12Image, ImageSyclWriteD3D12ReadTests) {
         //const auto* hostPtr = static_cast<float*>(stagingBufferD3D12->map());
         bufferD3D12->readBackDataLinear(sizeInBytes, hostPtr);
         std::string errorMessage;
-        if (!checkIsArrayLinearTyped(formatInfo, width, height, hostPtr, errorMessage)) {
+        if (!checkIsArrayLinear(formatInfo, width, height, hostPtr, errorMessage)) {
             descriptorAllocation = {};
             delete shaderManager;
             delete renderer;

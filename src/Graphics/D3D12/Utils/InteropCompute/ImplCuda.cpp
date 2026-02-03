@@ -249,7 +249,7 @@ void ImageD3D12CudaInterop::importExternalMemoryWin32Handle() {
     }
     arrayDescriptor.Depth = resourceDesc.DepthOrArraySize;
     arrayDescriptor.Format = getCudaArrayFormatFromD3D12Format(resourceDesc.Format);
-    arrayDescriptor.NumChannels = uint32_t(getDXGIFormatNumChannels(resourceDesc.Format));
+    arrayDescriptor.NumChannels = getNumChannels(resourceDesc.Format);
     if (resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
         arrayDescriptor.Flags |= CUDA_ARRAY3D_COLOR_ATTACHMENT;
     }
@@ -327,7 +327,7 @@ CUarray ImageD3D12CudaInterop::getCudaMipmappedArrayLevel(uint32_t level) {
 void ImageD3D12CudaInterop::copyFromDevicePtrAsync(
         void* devicePtrSrc, StreamWrapper stream, void* eventOut) {
     const auto& resourceDesc = resource->getD3D12ResourceDesc();
-    size_t entryByteSize = getDXGIFormatSizeInBytes(resourceDesc.Format);
+    size_t entryByteSize = getFormatSize(resourceDesc.Format);
     if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
         CUDA_MEMCPY2D memcpySettings{};
         memcpySettings.srcMemoryType = CU_MEMORYTYPE_DEVICE;
@@ -368,7 +368,7 @@ void ImageD3D12CudaInterop::copyFromDevicePtrAsync(
 void ImageD3D12CudaInterop::copyToDevicePtrAsync(
         void* devicePtrDst, StreamWrapper stream, void* eventOut) {
     const auto& resourceDesc = resource->getD3D12ResourceDesc();
-    size_t entryByteSize = getDXGIFormatSizeInBytes(resourceDesc.Format);
+    size_t entryByteSize = getFormatSize(resourceDesc.Format);
     if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
         CUDA_MEMCPY2D memcpySettings{};
         memcpySettings.srcMemoryType = CU_MEMORYTYPE_ARRAY;
@@ -404,6 +404,13 @@ void ImageD3D12CudaInterop::copyToDevicePtrAsync(
                 "Error in ImageComputeApiExternalMemoryVk::copyToDevicePtrAsync: "
                 "Unsupported image view type.");
     }
+}
+
+void ImageD3D12CudaInterop::print() {
+    std::cerr << "[SGL] ENTER: ImageD3D12CudaInterop::print()\n";
+    // if (resource) resource->print();
+    // std::cout << "More stuff here!\n");
+    std::cerr << "[SGL] LEAVE: ImageD3D12CudaInterop::print()\n";
 }
 
 

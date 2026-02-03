@@ -60,19 +60,19 @@ typedef std::shared_ptr<CommandList> CommandListPtr;
 class Resource;
 typedef std::shared_ptr<Resource> ResourcePtr;
 
-DLL_OBJECT size_t getDXGIFormatNumChannels(DXGI_FORMAT format);
-DLL_OBJECT size_t getDXGIFormatChannelSizeInBytes(DXGI_FORMAT format);
-DLL_OBJECT size_t getDXGIFormatSizeInBytes(DXGI_FORMAT format);
-DLL_OBJECT ChannelFormat getDXGIFormatChannelFormat(DXGI_FORMAT format);
-DLL_OBJECT ChannelCategory getDXGIFormatChannelCategory(DXGI_FORMAT format);
-DLL_OBJECT FormatInfo getDXGIFormatInfo(DXGI_FORMAT format);
+DLL_OBJECT uint32_t        getNumChannels(DXGI_FORMAT frmt);
+DLL_OBJECT size_t          getChannelSize(DXGI_FORMAT frmt);
+DLL_OBJECT size_t          getFormatSize(DXGI_FORMAT frmt);
+DLL_OBJECT ChannelFormat   getChannelFormat(DXGI_FORMAT frmt);
+DLL_OBJECT ChannelCategory getChannelCategory(DXGI_FORMAT frmt);
+DLL_OBJECT FormatInfo      getFormatInfo(DXGI_FORMAT frmt);
 
-DLL_OBJECT std::string getDXGIFormatHLSLStructuredTypeString(DXGI_FORMAT format);
-DLL_OBJECT std::string convertDXGIFormatToString(DXGI_FORMAT format);
+DLL_OBJECT std::string getDXGIFormatHLSLStructuredTypeString(DXGI_FORMAT frmt);
+DLL_OBJECT std::string convertDXGIFormatToString(DXGI_FORMAT frmt);
 
 class DLL_OBJECT Resource {
 public:
-    explicit Resource(Device* device, const ResourceSettings& resourceSettings);
+    explicit Resource(Device* device, const ResourceSettings& settings);
     ~Resource();
 
     /*
@@ -81,20 +81,20 @@ public:
     void uploadDataLinear(size_t sizeInBytesData, const void* dataPtr);
     void uploadDataLinear(
             size_t sizeInBytesData, const void* dataPtr,
-            const ResourcePtr& intermediateResource, const CommandListPtr& commandList);
+            const ResourcePtr& intermediateResource, const CommandListPtr &cmdList);
     void readBackDataLinear(size_t sizeInBytesData, void* dataPtr);
 
-    void transition(D3D12_RESOURCE_STATES stateNew, const CommandListPtr& commandList);
-    void transition(D3D12_RESOURCE_STATES stateNew, CommandList* commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, const CommandListPtr& commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, CommandList* commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, const CommandListPtr& commandList);
-    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, CommandList* commandList);
-    void barrierUAV(const CommandListPtr& commandList);
-    void barrierUAV(CommandList* commandList);
+    void transition(D3D12_RESOURCE_STATES stateNew, const CommandListPtr &cmdList);
+    void transition(D3D12_RESOURCE_STATES stateNew, CommandList *cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, const CommandListPtr &cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, CommandList *cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, const CommandListPtr &cmdList);
+    void transition(D3D12_RESOURCE_STATES stateOld, D3D12_RESOURCE_STATES stateNew, uint32_t subresourcce, CommandList *cmdList);
+    void barrierUAV(const CommandListPtr &cmdList);
+    void barrierUAV(CommandList *cmdList);
 
-    void* map();
-    void* map(size_t readRangeBegin, size_t readRangeEnd);
+    void  *map();
+    void  *map(size_t readRangeBegin, size_t readRangeEnd);
     void unmap();
     void unmap(size_t writtenRangeBegin, size_t writtenRangeEnd);
 
@@ -112,25 +112,26 @@ public:
 
     inline Device* getDevice() { return device; }
     inline ID3D12Resource* getD3D12ResourcePtr() { return resource.Get(); }
-    [[nodiscard]] inline const ResourceSettings& getResourceSettings() const { return resourceSettings; }
-    [[nodiscard]] inline const D3D12_RESOURCE_DESC& getD3D12ResourceDesc() const { return resourceSettings.resourceDesc; }
+    [[nodiscard]] inline const ResourceSettings& getResourceSettings() const { return settings; }
+    [[nodiscard]] inline const D3D12_RESOURCE_DESC& getD3D12ResourceDesc() const { return settings.resourceDesc; }
+
+    void print();
 
 private:
     Device* device;
 
-    ResourceSettings resourceSettings;
+    ResourceSettings settings;
     uint32_t numSubresources = 0;
     ComPtr<ID3D12Resource> resource{};
 
     void queryCopiableFootprints();
-    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> subresourceLayoutArray;
-    std::vector<UINT> subresourceNumRowsArray;
-    std::vector<UINT64> subresourceRowSizeInBytesArray;
-    std::vector<UINT64> subresourceTotalBytesArray;
+    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> _subLayout;
+    std::vector<UINT> _subNumRows;
+    std::vector<UINT64> _subRowSize;
+    std::vector<UINT64> _subTotalSize;
 
-    void uploadDataLinearInternal(
-            size_t sizeInBytesData, const void* dataPtr,
-            ID3D12Resource* intermediateResource, CommandList* commandList);
+    void uploadDataLinearInternal(size_t sizeInBytesData, const void *dataPtr,
+                                  ID3D12Resource *intermediateResource, CommandList *cmdList);
 };
 
 }}

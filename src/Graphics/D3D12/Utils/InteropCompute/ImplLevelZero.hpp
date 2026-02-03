@@ -84,6 +84,8 @@ public:
     void copyFromDevicePtrAsync(void* devicePtrSrc, StreamWrapper stream, void* eventOut = nullptr) override;
     void copyToDevicePtrAsync(void* devicePtrDst, StreamWrapper stream, void* eventOut = nullptr) override;
 
+    void print() override;
+
     ze_image_handle_t getImageHandle() { return static_cast<ze_image_handle_t>(mipmappedArray); }
 
 protected:

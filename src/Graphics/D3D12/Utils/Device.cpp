@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream>
+
 #include <Utils/StringUtils.hpp>
 
 #include "../Render/CommandList.hpp"
@@ -34,6 +36,28 @@
 
 namespace sgl { namespace d3d12 {
 
+//----------------------------------------------------------------------------//
+std::string deviceVendor(DeviceVendor vendor) {
+    switch (vendor) {
+        case DeviceVendor::NVIDIA : return std::string("NVidia");
+        case DeviceVendor::AMD    : return std::string("AMD");
+        case DeviceVendor::INTEL  : return std::string("Intel");
+        case DeviceVendor::UNKNOWN: return std::string("Unknown");
+    }
+    return std::string("Unspecified");
+}
+//----------------------------------------------------------------------------//
+std::string featureLevel(D3D_FEATURE_LEVEL level) {
+    if (level >= D3D_FEATURE_LEVEL_9_1 &&
+        level <= D3D_FEATURE_LEVEL_12_2) {
+        uint32_t l = static_cast<uint32_t>(level) >> 8;
+        return std::to_string(l >> 4) + "." + std::to_string(l & 0x0F);
+    }
+    if (level == D3D_FEATURE_LEVEL_1_0_CORE)    return std::string("1.0 Core");
+    if (level == D3D_FEATURE_LEVEL_1_0_GENERIC) return std::string("1.0 Generic");
+    return std::string("Unspecified");
+}
+//----------------------------------------------------------------------------//
 void debugMessageCallbackD3D12(
         D3D12_MESSAGE_CATEGORY Category,
         D3D12_MESSAGE_SEVERITY Severity,
@@ -43,9 +67,12 @@ void debugMessageCallbackD3D12(
     auto* device = static_cast<Device*>(pContext);
     device->debugMessageCallback(Category, Severity, ID, pDescription);
 }
+//----------------------------------------------------------------------------//
 
+//-==========================================================================-//
 Device::Device(const ComPtr<IDXGIAdapter1> &dxgiAdapter1, D3D_FEATURE_LEVEL featureLevel, bool useDebugLayer)
         : dxgiAdapter1(dxgiAdapter1), featureLevel(featureLevel), useDebugLayer(useDebugLayer) {
+    std::cerr << "[SGL] ENTER: Device::Device(const ComPtr<IDXGIAdapter1> &, D3D_FEATURE_LEVEL, bool)\n";
     commandListsSingleTime.resize(int(CommandListType::MAX_VAL), {});
     ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
     ThrowIfFailed(D3D12CreateDevice(dxgiAdapter4.Get(), featureLevel, IID_PPV_ARGS(&d3d12Device2)));
@@ -97,8 +124,9 @@ Device::Device(const ComPtr<IDXGIAdapter1> &dxgiAdapter1, D3D_FEATURE_LEVEL feat
     if (!FAILED(d3d12Device2->CreateCommandQueue(&commandQueueDesc, IID_PPV_ARGS(&commandQueueCompute)))) {
         supportsComputeQueue = true;
     }
+    std::cerr << "[SGL] LEAVE: Device::Device(const ComPtr<IDXGIAdapter1> &, D3D_FEATURE_LEVEL, bool)\n";
 }
-
+//----------------------------------------------------------------------------//
 Device::~Device() {
     commandListsSingleTime.clear();
 
@@ -107,7 +135,7 @@ Device::~Device() {
         ThrowIfFailed(pInfoQueue1->UnregisterMessageCallback(callbackCookie));
     }
 }
-
+//----------------------------------------------------------------------------//
 void Device::debugMessageCallback(
         D3D12_MESSAGE_CATEGORY Category,
         D3D12_MESSAGE_SEVERITY Severity,
@@ -115,111 +143,102 @@ void Device::debugMessageCallback(
         LPCSTR pDescription) {
     sgl::Logfile::get()->writeError(std::string() + "Debug message: " + pDescription);
 }
-
+//----------------------------------------------------------------------------//
 D3D_FEATURE_LEVEL Device::getFeatureLevel() const {
     return featureLevel;
 }
-
+//----------------------------------------------------------------------------//
 DeviceVendor Device::getVendor() const {
-    if (vendorId == 0x10DE) {
-        return DeviceVendor::NVIDIA;
-    } else if (vendorId == 0x1002) {
-        return DeviceVendor::AMD;
-    } else if (vendorId == 0x8086) {
-        return DeviceVendor::INTEL;
-    } else {
-        return DeviceVendor::UNKNOWN;
-    }
+    if (vendorId == 0x10DE) return DeviceVendor::NVIDIA;
+    if (vendorId == 0x1002) return DeviceVendor::AMD;
+    if (vendorId == 0x8086) return DeviceVendor::INTEL;
+    return DeviceVendor::UNKNOWN;
 }
-
+//----------------------------------------------------------------------------//
 bool Device::getSupportsROVs() const {
     if (featureLevel >= D3D_FEATURE_LEVEL_12_1) {
         return true;
     }
-    D3D12_FEATURE_DATA_D3D12_OPTIONS featureDataOptions;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS dataOptions;
     ThrowIfFailed(d3d12Device2->CheckFeatureSupport(
-            D3D12_FEATURE_D3D12_OPTIONS, &featureDataOptions, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)));
-    return featureDataOptions.ROVsSupported;
+            D3D12_FEATURE_D3D12_OPTIONS, &dataOptions, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)));
+    return dataOptions.ROVsSupported;
 }
-
+//----------------------------------------------------------------------------//
 bool Device::getFormatSupportsTypedLoadStore(DXGI_FORMAT format, bool typedLoad, bool typedStore) const {
-    if (format == DXGI_FORMAT_R32_FLOAT || format == DXGI_FORMAT_R32_UINT || format == DXGI_FORMAT_R32_SINT) {
-        return true;
-    }
+    if (format == DXGI_FORMAT_R32_FLOAT ||
+        format == DXGI_FORMAT_R32_UINT  ||
+        format == DXGI_FORMAT_R32_SINT) return true;
 
-    D3D12_FEATURE_DATA_D3D12_OPTIONS featureDataOptions{};
-    if (!SUCCEEDED(d3d12Device2->CheckFeatureSupport(
-            D3D12_FEATURE_D3D12_OPTIONS, &featureDataOptions, sizeof(featureDataOptions)))) {
+    D3D12_FEATURE_DATA_D3D12_OPTIONS dataOptions{};
+    if (!SUCCEEDED(d3d12Device2->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS,
+                                                     &dataOptions, sizeof(dataOptions)))) {
         return false;
     }
-    if (!featureDataOptions.TypedUAVLoadAdditionalFormats) {
-        return false;
-    }
+    if (!dataOptions.TypedUAVLoadAdditionalFormats) return false;
 
-    if (format == DXGI_FORMAT_R32G32B32A32_FLOAT
-            || format == DXGI_FORMAT_R32G32B32A32_UINT
-            || format == DXGI_FORMAT_R32G32B32A32_SINT
-            || format == DXGI_FORMAT_R16G16B16A16_FLOAT
-            || format == DXGI_FORMAT_R16G16B16A16_UINT
-            || format == DXGI_FORMAT_R16G16B16A16_SINT
-            || format == DXGI_FORMAT_R8G8B8A8_UNORM
-            || format == DXGI_FORMAT_R8G8B8A8_UINT
-            || format == DXGI_FORMAT_R8G8B8A8_SINT
-            || format == DXGI_FORMAT_R16_FLOAT
-            || format == DXGI_FORMAT_R16_UINT
-            || format == DXGI_FORMAT_R16_SINT
-            || format == DXGI_FORMAT_R8_UNORM
-            || format == DXGI_FORMAT_R8_UINT
-            || format == DXGI_FORMAT_R8_SINT) {
-        return true;
-    }
+    if (format == DXGI_FORMAT_R32G32B32A32_FLOAT ||
+        format == DXGI_FORMAT_R32G32B32A32_UINT  ||
+        format == DXGI_FORMAT_R32G32B32A32_SINT  ||
+        format == DXGI_FORMAT_R16G16B16A16_FLOAT ||
+        format == DXGI_FORMAT_R16G16B16A16_UINT  ||
+        format == DXGI_FORMAT_R16G16B16A16_SINT  ||
+        format == DXGI_FORMAT_R8G8B8A8_UNORM     ||
+        format == DXGI_FORMAT_R8G8B8A8_UINT      ||
+        format == DXGI_FORMAT_R8G8B8A8_SINT      ||
+        format == DXGI_FORMAT_R16_FLOAT          ||
+        format == DXGI_FORMAT_R16_UINT           ||
+        format == DXGI_FORMAT_R16_SINT           ||
+        format == DXGI_FORMAT_R8_UNORM           ||
+        format == DXGI_FORMAT_R8_UINT            ||
+        format == DXGI_FORMAT_R8_SINT) return true;
 
-    D3D12_FEATURE_DATA_FORMAT_SUPPORT featureDataFormatSupport = {
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT frmtSupport = {
             format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE
     };
-    if (!SUCCEEDED(d3d12Device2->CheckFeatureSupport(
-            D3D12_FEATURE_FORMAT_SUPPORT, &featureDataFormatSupport, sizeof(featureDataFormatSupport)))) {
+    if (!SUCCEEDED(d3d12Device2->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT,
+                                                     &frmtSupport, sizeof(frmtSupport)))) {
         return false;
     }
 
     DWORD mask = 0;
-    if (typedLoad) {
-        mask |= D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD;
-    }
-    if (typedStore) {
-        mask |= D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
-    }
-    return (featureDataFormatSupport.Support2 & mask) == mask;
+    if (typedLoad ) mask |= D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD;
+    if (typedStore) mask |= D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
+    return (frmtSupport.Support2 & mask) == mask;
 }
-
-ID3D12CommandQueue* Device::getD3D12CommandQueue(CommandListType commandListType) {
-    if (commandListType == CommandListType::DIRECT) {
+//----------------------------------------------------------------------------//
+ID3D12CommandQueue* Device::getD3D12CommandQueue(CommandListType cmdListType) {
+    if (cmdListType == CommandListType::DIRECT) {
         return commandQueueDirect.Get();
-    } else if (commandListType == CommandListType::COMPUTE) {
+    } else if (cmdListType == CommandListType::COMPUTE) {
         return commandQueueCompute.Get();
     }
     sgl::Logfile::get()->throwError("Error in Device::getD3D12CommandQueue: Using unsupported command list type.");
     return nullptr;
 }
-
-void Device::runSingleTimeCommands(
-        const std::function<void(CommandList*)>& workFunctor, CommandListType commandListType) {
-    CommandListPtr commandList = commandListsSingleTime[int(commandListType)];
-    if (!commandList) {
-        commandList = std::make_shared<CommandList>(this, commandListType);
-        commandListsSingleTime[int(commandListType)] = commandList;
+//----------------------------------------------------------------------------//
+void Device::runOnce(const std::function<void(CommandList*)>& func,
+                     CommandListType cmdListType) {
+    std::cerr << "[SGL] ENTER: Device::runOnce(const std::function<void(CommandList*)>&, CommandListType\n";
+    CommandListPtr cmdList = commandListsSingleTime[int(cmdListType)];
+    if (!cmdList) {
+        std::cerr << "[SGL]   Creating new command list\n";
+        cmdList = std::make_shared<CommandList>(this, cmdListType);
+        commandListsSingleTime[int(cmdListType)] = cmdList;
     } else {
-        commandList->reset();
+        std::cerr << "[SGL]   Resetting existing command list\n";
+        cmdList->reset();
     }
-    ID3D12CommandList* d3d12CommandList = commandList->getD3D12CommandListPtr();
-    ID3D12CommandQueue* d3d12CommandQueue = getD3D12CommandQueue(commandListType);
-    workFunctor(commandList.get());
+    ID3D12CommandList* d3d12CommandList = cmdList->getD3D12CommandListPtr();
+    ID3D12CommandQueue* d3d12CommandQueue = getD3D12CommandQueue(cmdListType);
+    func(cmdList.get());
 
     FencePtr fence = std::make_shared<Fence>(this);
-    commandList->close();
+    cmdList->close();
     d3d12CommandQueue->ExecuteCommandLists(1, &d3d12CommandList);
     ThrowIfFailed(d3d12CommandQueue->Signal(fence->getD3D12Fence(), 1));
     fence->waitOnCpu(1);
+    std::cerr << "[SGL] LEAVE: Device::runOnce(const std::function<void(CommandList*)>&, CommandListType\n";
 }
-
+//-==========================================================================-//
 }}

@@ -32,7 +32,7 @@
 
 #include "Common.hpp"
 
-void initializeHostPointerTyped(sgl::ChannelFormat channelFormat, size_t numEntries, int value, void* ptr) {
+void initHostData(sgl::ChannelFormat channelFormat, size_t numEntries, int value, void* ptr) {
     if (channelFormat == sgl::ChannelFormat::FLOAT32) {
         auto* hostPtr = static_cast<float*>(ptr);
         for (size_t i = 0; i < numEntries; i++) {
@@ -58,7 +58,7 @@ void initializeHostPointerTyped(sgl::ChannelFormat channelFormat, size_t numEntr
     }
 }
 
-void initializeHostPointerLinearTyped(sgl::ChannelFormat channelFormat, size_t numEntries, void* ptr) {
+void initHostDataLinear(sgl::ChannelFormat channelFormat, size_t numEntries, void* ptr) {
     if (channelFormat == sgl::ChannelFormat::FLOAT32) {
         auto* hostPtr = static_cast<float*>(ptr);
         for (size_t i = 0; i < numEntries; i++) {
@@ -109,7 +109,7 @@ bool checkIsArrayLinear(
     return true;
 }
 
-bool checkIsArrayLinearTyped(
+bool checkIsArrayLinear(
         const sgl::FormatInfo& formatInfo, size_t width, size_t height, void* ptr, std::string& errorMessage) {
     auto channelFormat = formatInfo.channelFormat;
     if (channelFormat == sgl::ChannelFormat::FLOAT32) {

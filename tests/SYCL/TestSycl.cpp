@@ -109,7 +109,7 @@ TEST_F(TestSycl, WriteKernelImageTest) {
     syclexp::unsampled_image_handle imageSyclHandle =
             syclexp::create_image(imageMemoryHandle, imageDescriptor, *syclQueue);
 
-    sycl::event writeImgEvent = writeSyclBindlessImageIncreasingIndices(
+    sycl::event writeImgEvent = writeSyclBindlessTestImg(
             *syclQueue, imageSyclHandle, formatInfo, imageDescriptor.width, imageDescriptor.height);
     auto copyEvent = syclQueue->ext_oneapi_copy(imageMemoryHandle, hostPtr, imageDescriptor, writeImgEvent);
     //auto barrierEvent = syclQueue->ext_oneapi_submit_barrier({ copyEvent }); // broken
@@ -117,7 +117,7 @@ TEST_F(TestSycl, WriteKernelImageTest) {
     copyEvent.wait_and_throw();
 
     std::string errorMessage;
-    if (!checkIsArrayLinearTyped(formatInfo, imageDescriptor.width, imageDescriptor.height, hostPtr, errorMessage)) {
+    if (!checkIsArrayLinear(formatInfo, imageDescriptor.width, imageDescriptor.height, hostPtr, errorMessage)) {
         ASSERT_TRUE(false) << errorMessage;
     }
 

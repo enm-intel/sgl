@@ -26,6 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <iostream> // for std::cout, std::cerr
+#include <format>   // for std::format
+
 #include "../Resource.hpp"
 #include "ImplSycl.hpp"
 
@@ -38,6 +41,30 @@ extern sycl::queue* g_syclQueue;
 
 namespace syclexp = sycl::ext::oneapi::experimental;
 
+// clang-format off
+// Some commonly used channel types
+constexpr sycl::image_channel_type sycl_uint8   = sycl::image_channel_type::unsigned_int8;
+constexpr sycl::image_channel_type sycl_uint16  = sycl::image_channel_type::unsigned_int16;
+constexpr sycl::image_channel_type sycl_uint32  = sycl::image_channel_type::unsigned_int32;
+constexpr sycl::image_channel_type sycl_sint8   = sycl::image_channel_type::signed_int8;
+constexpr sycl::image_channel_type sycl_sint16  = sycl::image_channel_type::signed_int16;
+constexpr sycl::image_channel_type sycl_sint32  = sycl::image_channel_type::signed_int32;
+constexpr sycl::image_channel_type sycl_unorm8  = sycl::image_channel_type::unorm_int8;
+constexpr sycl::image_channel_type sycl_unorm16 = sycl::image_channel_type::unorm_int16;
+constexpr sycl::image_channel_type sycl_snorm8  = sycl::image_channel_type::snorm_int8;
+constexpr sycl::image_channel_type sycl_snorm16 = sycl::image_channel_type::snorm_int16;
+constexpr sycl::image_channel_type sycl_half    = sycl::image_channel_type::fp16;
+constexpr sycl::image_channel_type sycl_float   = sycl::image_channel_type::fp32;
+
+constexpr sycl::image_channel_order sycl_r    = sycl::image_channel_order::r;
+constexpr sycl::image_channel_order sycl_rg   = sycl::image_channel_order::rg;
+constexpr sycl::image_channel_order sycl_rgb  = sycl::image_channel_order::rgb;
+constexpr sycl::image_channel_order sycl_rgba = sycl::image_channel_order::rgba;
+
+template<typename T> 
+inline constexpr uint32_t to_u32(T val) { return static_cast<uint32_t>(val); }
+// clang-format on
+
 namespace sgl { namespace d3d12 {
 
 struct SyclExternalSemaphoreWrapper {
@@ -47,10 +74,93 @@ struct SyclExternalMemWrapper {
     syclexp::external_mem syclExternalMem;
 };
 struct SyclImageMemHandleWrapper {
-    syclexp::image_descriptor syclImageDescriptor;
-    syclexp::image_mem_handle syclImageMemHandle;
+    syclexp::image_descriptor imgDesc;
+    syclexp::image_mem_handle memHandle;
 };
 
+//----------------------------------------------------------------------------//
+sycl::image_channel_type getSyclChannelType(DXGI_FORMAT format) {
+    switch (format) {
+        case DXGI_FORMAT_R8_UINT:
+        case DXGI_FORMAT_R8G8_UINT:
+        case DXGI_FORMAT_R8G8B8A8_UINT:
+            return sycl_uint8;
+        case DXGI_FORMAT_R16_UINT:
+        case DXGI_FORMAT_R16G16_UINT:
+        case DXGI_FORMAT_R16G16B16A16_UINT:
+            return sycl_uint16;
+        case DXGI_FORMAT_R32_UINT:
+        case DXGI_FORMAT_R32G32_UINT:
+        case DXGI_FORMAT_R32G32B32_UINT:
+        case DXGI_FORMAT_R32G32B32A32_UINT:
+            return sycl_uint32;
+        case DXGI_FORMAT_R8_SINT:
+        case DXGI_FORMAT_R8G8_SINT:
+        case DXGI_FORMAT_R8G8B8A8_SINT:
+            return sycl_sint8;
+        case DXGI_FORMAT_R16_SINT:
+        case DXGI_FORMAT_R16G16_SINT:
+        case DXGI_FORMAT_R16G16B16A16_SINT:
+            return sycl_sint16;
+        case DXGI_FORMAT_R32_SINT:
+        case DXGI_FORMAT_R32G32_SINT:
+        case DXGI_FORMAT_R32G32B32_SINT:
+        case DXGI_FORMAT_R32G32B32A32_SINT:
+            return sycl_sint32;
+        case DXGI_FORMAT_R8_UNORM:
+        case DXGI_FORMAT_R8G8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+            return sycl_unorm8;
+        case DXGI_FORMAT_R16_UNORM:
+        case DXGI_FORMAT_D16_UNORM:
+        case DXGI_FORMAT_R16G16_UNORM:
+        case DXGI_FORMAT_R16G16B16A16_UNORM:
+            return sycl_unorm16;
+        case DXGI_FORMAT_R8_SNORM:
+        case DXGI_FORMAT_R8G8_SNORM:
+        case DXGI_FORMAT_R8G8B8A8_SNORM:
+            return sycl_snorm8;
+        case DXGI_FORMAT_R16_SNORM:
+        case DXGI_FORMAT_R16G16_SNORM:
+        case DXGI_FORMAT_R16G16B16A16_SNORM:
+            return sycl_snorm16;
+        case DXGI_FORMAT_R16_FLOAT:
+        case DXGI_FORMAT_R16G16_FLOAT:
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+            return sycl_half;
+        case DXGI_FORMAT_R32_FLOAT:
+        case DXGI_FORMAT_R32G32_FLOAT:
+        case DXGI_FORMAT_R32G32B32_FLOAT:
+        case DXGI_FORMAT_R32G32B32A32_FLOAT:
+        case DXGI_FORMAT_D32_FLOAT:
+            return sycl_float;
+        default:
+            sgl::Logfile::get()->throwError("Error in getSyclChannelType:"
+                                            " Unsupported channel type.");
+            return sycl_float;
+    }
+    return sycl_float;
+}
+//----------------------------------------------------------------------------//
+static sycl::addressing_mode getSyclSampAddrMode(D3D12_TEXTURE_ADDRESS_MODE mode) {
+    switch (mode) {
+        case D3D12_TEXTURE_ADDRESS_MODE_WRAP:
+            return sycl::addressing_mode::repeat;
+        case D3D12_TEXTURE_ADDRESS_MODE_MIRROR:
+        case D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE:
+            return sycl::addressing_mode::mirrored_repeat;
+        case D3D12_TEXTURE_ADDRESS_MODE_CLAMP:
+            return sycl::addressing_mode::clamp_to_edge;
+        case D3D12_TEXTURE_ADDRESS_MODE_BORDER:
+            return sycl::addressing_mode::clamp;
+        default:
+            return sycl::addressing_mode::none;
+    }
+}
+//----------------------------------------------------------------------------//
+
+//-==========================================================================-//
 void FenceD3D12SyclInterop::importExternalFenceWin32Handle() {
     // https://github.com/intel/llvm/blob/sycl/sycl/doc/extensions/experimental/sycl_ext_oneapi_bindless_images.asciidoc
     syclexp::external_semaphore_handle_type semaphoreHandleType =
@@ -62,7 +172,7 @@ void FenceD3D12SyclInterop::importExternalFenceWin32Handle() {
             syclExternalSemaphoreDescriptor, *g_syclQueue);
     externalSemaphore = reinterpret_cast<void*>(wrapper);
 }
-
+//----------------------------------------------------------------------------//
 void FenceD3D12SyclInterop::free() {
     freeHandle();
     if (externalSemaphore) {
@@ -72,11 +182,11 @@ void FenceD3D12SyclInterop::free() {
         externalSemaphore = {};
     }
 }
-
+//----------------------------------------------------------------------------//
 FenceD3D12SyclInterop::~FenceD3D12SyclInterop() {
     FenceD3D12SyclInterop::free();
 }
-
+//----------------------------------------------------------------------------//
 void FenceD3D12SyclInterop::signalFenceComputeApi(
             StreamWrapper stream, unsigned long long timelineValue, void* eventIn, void* eventOut) {
     auto* wrapper = reinterpret_cast<SyclExternalSemaphoreWrapper*>(externalSemaphore);
@@ -92,7 +202,7 @@ void FenceD3D12SyclInterop::signalFenceComputeApi(
         *static_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
 }
-
+//----------------------------------------------------------------------------//
 void FenceD3D12SyclInterop::waitFenceComputeApi(
         StreamWrapper stream, unsigned long long timelineValue, void* eventIn, void* eventOut) {
     auto* wrapper = reinterpret_cast<SyclExternalSemaphoreWrapper*>(externalSemaphore);
@@ -108,24 +218,25 @@ void FenceD3D12SyclInterop::waitFenceComputeApi(
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
 }
+//-==========================================================================-//
 
-
+//-==========================================================================-//
 void BufferD3D12SyclInterop::importExternalMemoryWin32Handle() {
-    size_t sizeInBytes = resource->getCopiableSizeInBytes();
+    size_t numBytes = resource->getCopiableSizeInBytes();
 
     // https://github.com/intel/llvm/blob/sycl/sycl/doc/extensions/experimental/sycl_ext_oneapi_bindless_images.asciidoc
     auto memoryHandleType = syclexp::external_mem_handle_type::win32_nt_dx12_resource;
     syclexp::external_mem_descriptor<syclexp::resource_win32_handle>
-            syclExternalMemDescriptor{(void*)handle, memoryHandleType, sizeInBytes};
+            syclExternalMemDescriptor{(void*)handle, memoryHandleType, numBytes};
     auto* wrapper = new SyclExternalMemWrapper;
     wrapper->syclExternalMem = syclexp::import_external_memory(
             syclExternalMemDescriptor, *g_syclQueue);
     externalMemory = reinterpret_cast<void*>(wrapper);
 
     devicePtr = syclexp::map_external_linear_memory(
-            wrapper->syclExternalMem, 0, sizeInBytes, *g_syclQueue);
+            wrapper->syclExternalMem, 0, numBytes, *g_syclQueue);
 }
-
+//----------------------------------------------------------------------------//
 void BufferD3D12SyclInterop::free() {
     freeHandle();
     if (externalMemory) {
@@ -136,11 +247,11 @@ void BufferD3D12SyclInterop::free() {
         externalMemory = {};
     }
 }
-
+//----------------------------------------------------------------------------//
 BufferD3D12SyclInterop::~BufferD3D12SyclInterop() {
     BufferD3D12SyclInterop::free();
 }
-
+//----------------------------------------------------------------------------//
 void BufferD3D12SyclInterop::copyFromDevicePtrAsync(
         void* devicePtrSrc, StreamWrapper stream, void* eventOut) {
     auto syclEvent = stream.syclQueuePtr->memcpy(devicePtr, devicePtrSrc, resource->getCopiableSizeInBytes());
@@ -148,7 +259,7 @@ void BufferD3D12SyclInterop::copyFromDevicePtrAsync(
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
 }
-
+//----------------------------------------------------------------------------//
 void BufferD3D12SyclInterop::copyToDevicePtrAsync(
         void* devicePtrDst, StreamWrapper stream, void* eventOut) {
     auto syclEvent = stream.syclQueuePtr->memcpy(devicePtrDst, devicePtr, resource->getCopiableSizeInBytes());
@@ -156,29 +267,31 @@ void BufferD3D12SyclInterop::copyToDevicePtrAsync(
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
 }
-
+//----------------------------------------------------------------------------//
 void BufferD3D12SyclInterop::copyFromHostPtrAsync(void* hostPtrSrc, StreamWrapper stream, void* eventOut) {
     auto syclEvent = stream.syclQueuePtr->memcpy(devicePtr, hostPtrSrc, resource->getCopiableSizeInBytes());
     if (eventOut) {
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
 }
-
+//----------------------------------------------------------------------------//
 void BufferD3D12SyclInterop::copyToHostPtrAsync(void* hostPtrDst, StreamWrapper stream, void* eventOut) {
     auto syclEvent = stream.syclQueuePtr->memcpy(hostPtrDst, devicePtr, resource->getCopiableSizeInBytes());
     if (eventOut) {
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
 }
+//-==========================================================================-//
 
-
+//-==========================================================================-//
 void ImageD3D12SyclInterop::importExternalMemoryWin32Handle() {
-    size_t sizeInBytes = resource->getCopiableSizeInBytes();
+    std::cerr << "[SGL] ENTER: ImageD3D12SyclInterop::importExternalMemoryWin32Handle())\n";
+    size_t numBytes = resource->getCopiableSizeInBytes();
 
     // https://github.com/intel/llvm/blob/sycl/sycl/doc/extensions/experimental/sycl_ext_oneapi_bindless_images.asciidoc
     auto memoryHandleType = syclexp::external_mem_handle_type::win32_nt_dx12_resource;
     syclexp::external_mem_descriptor<syclexp::resource_win32_handle>
-            syclExternalMemDescriptor{(void*)handle, memoryHandleType, sizeInBytes};
+            syclExternalMemDescriptor{(void*)handle, memoryHandleType, numBytes};
     auto* wrapper = new SyclExternalMemWrapper;
     wrapper->syclExternalMem = syclexp::import_external_memory(
             syclExternalMemDescriptor, *g_syclQueue);
@@ -186,119 +299,47 @@ void ImageD3D12SyclInterop::importExternalMemoryWin32Handle() {
 
     const auto& resourceDesc = resource->getD3D12ResourceDesc();
     auto* wrapperImg = new SyclImageMemHandleWrapper;
-    syclexp::image_descriptor& syclImageDescriptor = wrapperImg->syclImageDescriptor;
-    syclImageDescriptor.width = resourceDesc.Width;
-    if (resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE1D
-            && resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D
-            && resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+    syclexp::image_descriptor& imgDesc = wrapperImg->imgDesc;
+    imgDesc.width = resourceDesc.Width;
+    if (resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE1D &&
+        resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
+        resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
         sgl::Logfile::get()->throwError(
                 "Error in ImageD3D12SyclInterop::importExternalMemoryWin32Handle: Invalid D3D12 resource dimension.");
     }
-    if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D
-            || resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-        syclImageDescriptor.height = resourceDesc.Height;
+    if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
+        resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+        imgDesc.height = resourceDesc.Height;
     }
     if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-        // TODO: When syclImageDescriptor.array_size?
-        syclImageDescriptor.depth = resourceDesc.DepthOrArraySize;
+        // TODO: When imgDesc.array_size?
+        imgDesc.depth = resourceDesc.DepthOrArraySize;
     }
     // CUDA_ERROR_ALREADY_MAPPED generated if numLevels == 0.
-    syclImageDescriptor.num_levels = std::max(static_cast<unsigned>(resourceDesc.MipLevels), 1u);
+    imgDesc.num_levels = std::max(static_cast<unsigned>(resourceDesc.MipLevels), 1u);
 
-    syclImageDescriptor.num_channels = unsigned(getDXGIFormatNumChannels(resourceDesc.Format));
-    if (syclImageDescriptor.num_levels > 1) {
-        syclImageDescriptor.type = syclexp::image_type::mipmap;
+    imgDesc.num_channels = getNumChannels(resourceDesc.Format);
+    if (imgDesc.num_levels > 1) {
+        imgDesc.type = syclexp::image_type::mipmap;
     } else {
-        syclImageDescriptor.type = syclexp::image_type::standard;
+        imgDesc.type = syclexp::image_type::standard;
     }
 
-    switch (resourceDesc.Format) {
-    case DXGI_FORMAT_R8_UINT:
-    case DXGI_FORMAT_R8G8_UINT:
-    case DXGI_FORMAT_R8G8B8A8_UINT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::unsigned_int8;
-        break;
-    case DXGI_FORMAT_R16_UINT:
-    case DXGI_FORMAT_R16G16_UINT:
-    case DXGI_FORMAT_R16G16B16A16_UINT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::unsigned_int16;
-        break;
-    case DXGI_FORMAT_R32_UINT:
-    case DXGI_FORMAT_R32G32_UINT:
-    case DXGI_FORMAT_R32G32B32_UINT:
-    case DXGI_FORMAT_R32G32B32A32_UINT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::unsigned_int32;
-        break;
-    case DXGI_FORMAT_R8_SINT:
-    case DXGI_FORMAT_R8G8_SINT:
-    case DXGI_FORMAT_R8G8B8A8_SINT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::signed_int8;
-        break;
-    case DXGI_FORMAT_R16_SINT:
-    case DXGI_FORMAT_R16G16_SINT:
-    case DXGI_FORMAT_R16G16B16A16_SINT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::signed_int16;
-        break;
-    case DXGI_FORMAT_R32_SINT:
-    case DXGI_FORMAT_R32G32_SINT:
-    case DXGI_FORMAT_R32G32B32_SINT:
-    case DXGI_FORMAT_R32G32B32A32_SINT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::signed_int32;
-        break;
-    case DXGI_FORMAT_R8_UNORM:
-    case DXGI_FORMAT_R8G8_UNORM:
-    case DXGI_FORMAT_R8G8B8A8_UNORM:
-    case DXGI_FORMAT_B8G8R8A8_UNORM:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::unorm_int8;
-        break;
-    case DXGI_FORMAT_R16_UNORM:
-    case DXGI_FORMAT_D16_UNORM:
-    case DXGI_FORMAT_R16G16_UNORM:
-    case DXGI_FORMAT_R16G16B16A16_UNORM:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::unorm_int16;
-        break;
-    case DXGI_FORMAT_R8_SNORM:
-    case DXGI_FORMAT_R8G8_SNORM:
-    case DXGI_FORMAT_R8G8B8A8_SNORM:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::snorm_int8;
-        break;
-    case DXGI_FORMAT_R16_SNORM:
-    case DXGI_FORMAT_R16G16_SNORM:
-    case DXGI_FORMAT_R16G16B16A16_SNORM:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::snorm_int16;
-        break;
-    case DXGI_FORMAT_R16_FLOAT:
-    case DXGI_FORMAT_R16G16_FLOAT:
-    case DXGI_FORMAT_R16G16B16A16_FLOAT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::fp16;
-        break;
-    case DXGI_FORMAT_R32_FLOAT:
-    case DXGI_FORMAT_R32G32_FLOAT:
-    case DXGI_FORMAT_R32G32B32_FLOAT:
-    case DXGI_FORMAT_R32G32B32A32_FLOAT:
-    case DXGI_FORMAT_D32_FLOAT:
-        syclImageDescriptor.channel_type = sycl::image_channel_type::fp32;
-        break;
-    default:
-        sgl::Logfile::get()->throwError(
-                "Error in ImageD3D12SyclInterop::_initialize: "
-                "Unsupported channel type for SYCL.");
-        return;
-    }
+    imgDesc.channel_type = getSyclChannelType(resourceDesc.Format);
 
-    syclImageDescriptor.verify();
+    imgDesc.verify();
 
     auto* wrapperMem = reinterpret_cast<SyclExternalMemWrapper*>(externalMemory);
-    bool supportsHandleType = false;
-    std::vector<syclexp::image_memory_handle_type> supportedHandleTypes =
-            syclexp::get_image_memory_support(syclImageDescriptor, *g_syclQueue);
-    for (auto supportedHandleType : supportedHandleTypes) {
-        if (supportedHandleType == syclexp::image_memory_handle_type::opaque_handle) {
-            supportsHandleType = true;
+    bool supportsHandle = false;
+    std::vector<syclexp::image_memory_handle_type> handleTypes =
+            syclexp::get_image_memory_support(imgDesc, *g_syclQueue);
+    for (auto handleType : handleTypes) {
+        if (handleType == syclexp::image_memory_handle_type::opaque_handle) {
+            supportsHandle = true;
             break;
         }
     }
-    if (!supportsHandleType) {
+    if (!supportsHandle) {
         syclexp::release_external_memory(wrapperMem->syclExternalMem, *g_syclQueue);
         delete wrapperMem;
         externalMemory = nullptr;
@@ -314,19 +355,20 @@ void ImageD3D12SyclInterop::importExternalMemoryWin32Handle() {
         throw UnsupportedComputeApiFeatureException("Unsupported SYCL image memory type");
     }
 
-    wrapperImg->syclImageMemHandle = syclexp::map_external_image_memory(
-            wrapperMem->syclExternalMem, syclImageDescriptor, *g_syclQueue);
-    mipmappedArray = reinterpret_cast<void*>(wrapperImg);
+    wrapperImg->memHandle = syclexp::map_external_image_memory(
+            wrapperMem->syclExternalMem, imgDesc, *g_syclQueue);
+    _mipmap = reinterpret_cast<void*>(wrapperImg);
+    std::cerr << "[SGL] LEAVE: ImageD3D12SyclInterop::importExternalMemoryWin32Handle())\n";
 }
-
+//----------------------------------------------------------------------------//
 void ImageD3D12SyclInterop::free() {
     freeHandle();
-    if (mipmappedArray) {
-        auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(mipmappedArray);
+    if (_mipmap) {
+        auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(_mipmap);
         syclexp::free_image_mem(
-                wrapperImg->syclImageMemHandle, wrapperImg->syclImageDescriptor.type, *g_syclQueue);
+                wrapperImg->memHandle, wrapperImg->imgDesc.type, *g_syclQueue);
         delete wrapperImg;
-        mipmappedArray = {};
+        _mipmap = {};
     }
     if (externalMemory) {
         auto* wrapper = reinterpret_cast<SyclExternalMemWrapper*>(externalMemory);
@@ -335,40 +377,57 @@ void ImageD3D12SyclInterop::free() {
         externalMemory = {};
     }
 }
-
+//----------------------------------------------------------------------------//
 ImageD3D12SyclInterop::~ImageD3D12SyclInterop() {
     ImageD3D12SyclInterop::free();
 }
-
+//----------------------------------------------------------------------------//
 void ImageD3D12SyclInterop::copyFromDevicePtrAsync(
         void* devicePtrSrc, StreamWrapper stream, void* eventOut) {
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(mipmappedArray);
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(_mipmap);
     auto syclEvent = stream.syclQueuePtr->ext_oneapi_copy(
-            devicePtrSrc, wrapperImg->syclImageMemHandle, wrapperImg->syclImageDescriptor);
+            devicePtrSrc, wrapperImg->memHandle, wrapperImg->imgDesc);
     if (eventOut) {
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
 }
-
+//----------------------------------------------------------------------------//
 void ImageD3D12SyclInterop::copyToDevicePtrAsync(
         void* devicePtrDst, StreamWrapper stream, void* eventOut) {
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(mipmappedArray);
+    std::cerr << "[SGL] ENTER: ImageD3D12SyclInterop::copyToDevicePtrAsync(void*, StreamWrapper, void*)\n";
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(_mipmap);
     auto syclEvent = stream.syclQueuePtr->ext_oneapi_copy(
-            wrapperImg->syclImageMemHandle, devicePtrDst, wrapperImg->syclImageDescriptor);
+            wrapperImg->memHandle, devicePtrDst, wrapperImg->imgDesc);
     if (eventOut) {
         *reinterpret_cast<sycl::event*>(eventOut) = std::move(syclEvent);
     }
+    std::cerr << "[SGL] LEAVE: ImageD3D12SyclInterop::copyToDevicePtrAsync(void*, StreamWrapper, void*)\n";
 }
+//----------------------------------------------------------------------------//
+void ImageD3D12SyclInterop::print() {
+    std::cerr << "[SGL] ENTER: ImageD3D12SyclInterop::print()\n";
+    if (resource) resource->print();
+    std::cout << std::format("  Sample image     : {}\n", imageComputeApiInfo.useSampledImage);
+    std::cout << std::format("  Use mipmap       : {}\n", imageComputeApiInfo.textureExternalMemorySettings.useMipmappedArray);
+    std::cout << std::format("  Normalize coords : {}\n", imageComputeApiInfo.textureExternalMemorySettings.useNormalizedCoordinates);
+    std::cout << std::format("  Linear interp.   : {}\n", imageComputeApiInfo.textureExternalMemorySettings.useTrilinearOptimization);
+    std::cout << std::format("  Read as int      : {}\n", imageComputeApiInfo.textureExternalMemorySettings.readAsInteger);
+    std::cout << std::format("  Mipmap array     : {}\n", _mipmap);
+    std::cout << std::format("  External memory  : {}\n", externalMemory);
+    std::cout << std::format("  Handle           : {}\n", handle);
+    std::cerr << "[SGL] LEAVE: ImageD3D12SyclInterop::print()\n";
+}
+//-==========================================================================-//
 
-
+//-==========================================================================-//
 void UnsampledImageD3D12SyclInterop::initialize(const ImageD3D12ComputeApiExternalMemoryPtr& _image) {
     static_assert(sizeof(syclexp::unsampled_image_handle) == sizeof(rawImageHandle));
     this->image = _image;
     auto imageVkSycl = std::static_pointer_cast<ImageD3D12SyclInterop>(image);
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->mipmappedArray);
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->_mipmap);
 
     if (!syclexp::is_image_handle_supported<syclexp::unsampled_image_handle>(
-            wrapperImg->syclImageDescriptor, syclexp::image_memory_handle_type::opaque_handle,
+            wrapperImg->imgDesc, syclexp::image_memory_handle_type::opaque_handle,
             *g_syclQueue)) {
         if (openMessageBoxOnComputeApiError) {
             sgl::Logfile::get()->writeError(
@@ -383,10 +442,10 @@ void UnsampledImageD3D12SyclInterop::initialize(const ImageD3D12ComputeApiExtern
     }
 
     auto handle = syclexp::create_image(
-            wrapperImg->syclImageMemHandle, wrapperImg->syclImageDescriptor, *g_syclQueue);
+            wrapperImg->memHandle, wrapperImg->imgDesc, *g_syclQueue);
     rawImageHandle = handle.raw_handle;
 }
-
+//----------------------------------------------------------------------------//
 UnsampledImageD3D12SyclInterop::~UnsampledImageD3D12SyclInterop() {
     if (rawImageHandle) {
         syclexp::unsampled_image_handle handle{rawImageHandle};
@@ -394,28 +453,13 @@ UnsampledImageD3D12SyclInterop::~UnsampledImageD3D12SyclInterop() {
         rawImageHandle = {};
     }
 }
-
+//----------------------------------------------------------------------------//
 uint64_t UnsampledImageD3D12SyclInterop::getRawHandle() {
     return rawImageHandle;
 }
+//-==========================================================================-//
 
-
-static sycl::addressing_mode getSyclSamplerAddressModeD3D12(D3D12_TEXTURE_ADDRESS_MODE samplerAddressModeD3D12) {
-    switch (samplerAddressModeD3D12) {
-    case D3D12_TEXTURE_ADDRESS_MODE_WRAP:
-        return sycl::addressing_mode::repeat;
-    case D3D12_TEXTURE_ADDRESS_MODE_MIRROR:
-    case D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE:
-        return sycl::addressing_mode::mirrored_repeat;
-    case D3D12_TEXTURE_ADDRESS_MODE_CLAMP:
-        return sycl::addressing_mode::clamp_to_edge;
-    case D3D12_TEXTURE_ADDRESS_MODE_BORDER:
-        return sycl::addressing_mode::clamp;
-    default:
-        return sycl::addressing_mode::none;
-    }
-}
-
+//-==========================================================================-//
 void SampledImageD3D12SyclInterop::initialize(
             const ImageD3D12ComputeApiExternalMemoryPtr& _image,
             const TextureExternalMemorySettings& textureExternalMemorySettings) {
@@ -425,10 +469,10 @@ void SampledImageD3D12SyclInterop::initialize(
     const auto& samplerDesc = imageComputeApiInfo.samplerDesc;
 
     auto imageVkSycl = std::static_pointer_cast<ImageD3D12SyclInterop>(image);
-    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->mipmappedArray);
+    auto* wrapperImg = reinterpret_cast<SyclImageMemHandleWrapper*>(imageVkSycl->_mipmap);
 
     if (!syclexp::is_image_handle_supported<syclexp::sampled_image_handle>(
-            wrapperImg->syclImageDescriptor, syclexp::image_memory_handle_type::opaque_handle,
+            wrapperImg->imgDesc, syclexp::image_memory_handle_type::opaque_handle,
             *g_syclQueue)) {
         if (openMessageBoxOnComputeApiError) {
             sgl::Logfile::get()->writeError(
@@ -443,9 +487,9 @@ void SampledImageD3D12SyclInterop::initialize(
     }
 
     syclexp::bindless_image_sampler syclSampler{};
-    syclSampler.addressing[0] = getSyclSamplerAddressModeD3D12(samplerDesc.AddressU);
-    syclSampler.addressing[1] = getSyclSamplerAddressModeD3D12(samplerDesc.AddressV);
-    syclSampler.addressing[2] = getSyclSamplerAddressModeD3D12(samplerDesc.AddressW);
+    syclSampler.addressing[0] = getSyclSampAddrMode(samplerDesc.AddressU);
+    syclSampler.addressing[1] = getSyclSampAddrMode(samplerDesc.AddressV);
+    syclSampler.addressing[2] = getSyclSampAddrMode(samplerDesc.AddressW);
     syclSampler.coordinate =
             textureExternalMemorySettings.useNormalizedCoordinates
             ? sycl::coordinate_normalization_mode::normalized
@@ -467,10 +511,10 @@ void SampledImageD3D12SyclInterop::initialize(
     syclSampler.max_anisotropy = samplerDesc.MaxAnisotropy;
 
     auto handle = syclexp::create_image(
-            wrapperImg->syclImageMemHandle, wrapperImg->syclImageDescriptor, *g_syclQueue);
+            wrapperImg->memHandle, wrapperImg->imgDesc, *g_syclQueue);
     rawImageHandle = handle.raw_handle;
 }
-
+//----------------------------------------------------------------------------//
 SampledImageD3D12SyclInterop::~SampledImageD3D12SyclInterop() {
     if (rawImageHandle) {
         syclexp::sampled_image_handle handle{rawImageHandle};
@@ -478,9 +522,10 @@ SampledImageD3D12SyclInterop::~SampledImageD3D12SyclInterop() {
         rawImageHandle = {};
     }
 }
-
+//----------------------------------------------------------------------------//
 uint64_t SampledImageD3D12SyclInterop::getRawHandle() {
     return rawImageHandle;
 }
+//-==========================================================================-//
 
 }}
