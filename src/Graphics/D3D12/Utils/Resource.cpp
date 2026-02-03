@@ -705,24 +705,30 @@ void Resource::unmap(size_t writtenRangeBegin, size_t writtenRangeEnd) {
     resource->Unmap(0, &writtenRange);
 }
 //----------------------------------------------------------------------------//
-void Resource::uploadDataLinear(size_t sizeInBytesData, const void* dataPtr) {
+void Resource::uploadDataLinear(size_t size, const void *dataPtr) {
     std::cerr << "[SGL] ENTER: Resource::uploadDataLinear(size_t, const void*)\n";
-    size_t intermediateSizeInBytes;
+    size_t copySize;
     if (settings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
         std::cerr << "[SGL]   Resource is a buffer.\n";
-        intermediateSizeInBytes = sizeInBytesData;
-        if (sizeInBytesData > getCopiableSizeInBytes()) {
+        copySize = size;
+        if (size > getCopiableSizeInBytes()) {
             sgl::Logfile::get()->throwError(
                     "Error in Resource::uploadDataLinear: "
                     "The copy source is larger than the destination buffer.");
         }
     } else {
         std::cerr << "[SGL]   Resource is a texture.\n";
-        intermediateSizeInBytes = getCopiableSizeInBytes();
-        std::cerr << "[SGL]   Copiable size in bytes: " << intermediateSizeInBytes << "\n";
-        if (sizeInBytesData > getRowSizeInBytes() * settings.resourceDesc.Height * settings.resourceDesc.DepthOrArraySize) {
+        size_t actualSize = getRowSizeInBytes() * settings.resourceDesc.Height * settings.resourceDesc.DepthOrArraySize;
+        copySize = getCopiableSizeInBytes();
+        std::cerr << "[SGL]   Row      size  : " << getRowSizeInBytes() << "\n";
+        std::cerr << "[SGL]   Resource height: " << settings.resourceDesc.Height << "\n";
+        std::cerr << "[SGL]   Resource depth : " << settings.resourceDesc.DepthOrArraySize << "\n";
+        std::cerr << "[SGL]   Current  size  : " << size << "\n";
+        std::cerr << "[SGL]   Copiable size  : " << copySize << "\n";
+        std::cerr << "[SGL]   Actual   size  : " << actualSize << "\n";
+        if (size > actualSize) {
             sgl::Logfile::get()->throwError(
-                    "Error in Resource::readBackDataInternal: "
+                    "Error in Resource::uploadDataLinear: "
                     "The copy source is larger than the destination texture.");
         }
     }
@@ -730,7 +736,7 @@ void Resource::uploadDataLinear(size_t sizeInBytesData, const void* dataPtr) {
     queryCopiableFootprints();
     auto* d3d12Device = device->getD3D12Device2();
     CD3DX12_HEAP_PROPERTIES heapPropertiesUpload(D3D12_HEAP_TYPE_UPLOAD);
-    auto bufferDescUpload = CD3DX12_RESOURCE_DESC::Buffer(intermediateSizeInBytes);
+    auto bufferDescUpload = CD3DX12_RESOURCE_DESC::Buffer(copySize);
     ComPtr<ID3D12Resource> intermediateResource{};
     // https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12
     // "Upload heaps must start out in the state D3D12_RESOURCE_STATE_GENERIC_READ"
@@ -746,19 +752,19 @@ void Resource::uploadDataLinear(size_t sizeInBytesData, const void* dataPtr) {
     device->runOnce([&](CommandList* cmdList){
         this->transition(D3D12_RESOURCE_STATE_COPY_DEST, cmdList);
         // this->transition(D3D12_RESOURCE_STATE_COMMON, cmdList);
-        uploadDataLinearInternal(sizeInBytesData, dataPtr, intermediateResource.Get(), cmdList);
+        uploadDataLinearInternal(size, dataPtr, intermediateResource.Get(), cmdList);
     });
     std::cerr << "[SGL] LEAVE: Resource::uploadDataLinear(size_t, const void*)\n";
 }
 //----------------------------------------------------------------------------//
 void Resource::uploadDataLinear(
-        size_t sizeInBytesData, const void* dataPtr,
+        size_t size, const void* dataPtr,
         const ResourcePtr& intermediateResource, const CommandListPtr& cmdList) {
-    uploadDataLinearInternal(sizeInBytesData, dataPtr, intermediateResource->getD3D12ResourcePtr(), cmdList.get());
+    uploadDataLinearInternal(size, dataPtr, intermediateResource->getD3D12ResourcePtr(), cmdList.get());
 }
 //----------------------------------------------------------------------------//
 void Resource::uploadDataLinearInternal(
-        size_t sizeInBytesData, const void* dataPtr,
+        size_t size, const void* dataPtr,
         ID3D12Resource* intermediateResource, CommandList* cmdList) {
     std::cerr << "[SGL] ENTER: Resource::uploadDataLinearInternal(size_t, const void*, ID3D12Resource*, CommandList*)\n";
     auto* d3d12CommandList = cmdList->getD3D12GraphicsCommandListPtr();
@@ -766,7 +772,7 @@ void Resource::uploadDataLinearInternal(
     subData.pData = dataPtr;
     if (settings.resourceDesc.Height <= 1 && settings.resourceDesc.DepthOrArraySize <= 1) {
         // 1D data (no pitches necessary).
-        subData.RowPitch = LONG_PTR(sizeInBytesData);
+        subData.RowPitch = LONG_PTR(size);
         subData.SlicePitch = subData.RowPitch;
     } else if (settings.resourceDesc.DepthOrArraySize <= 1) {
         // 2D data (no slice pitch necessary).
@@ -789,50 +795,50 @@ void Resource::uploadDataLinearInternal(
     std::cerr << "[SGL] LEAVE: Resource::uploadDataLinearInternal(size_t, const void*, ID3D12Resource*, CommandList*)\n";
 }
 //----------------------------------------------------------------------------//
-void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
+void Resource::readBackDataLinear(size_t size, void* dataPtr) {
     std::cerr << "[SGL] ENTER: Resource::readBackDataLinear(size_t, void*)\n";
     if (numSubresources > 1) {
         sgl::Logfile::get()->throwError(
-                "Error in Resource::readBackDataInternal: "
+                "Error in Resource::readBackDataLinear: "
                 "The function only supports for resources with one single subresource.");
     }
     if (settings.resourceDesc.SampleDesc.Count > 1) {
         sgl::Logfile::get()->throwError(
-                "Error in Resource::readBackDataInternal: "
+                "Error in Resource::readBackDataLinear: "
                 "The function does not support multi-sampled resources.");
     }
 
     size_t rowSize = 0;
     size_t srcRowPitch;
-    size_t intermediateSizeInBytes;
+    size_t copySize;
     if (settings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
-        srcRowPitch = sizeInBytesData;
-        intermediateSizeInBytes = srcRowPitch;
-        if (sizeInBytesData > getCopiableSizeInBytes()) {
+        srcRowPitch = size;
+        copySize = srcRowPitch;
+        if (size > getCopiableSizeInBytes()) {
             sgl::Logfile::get()->throwError(
-                    "Error in Resource::readBackDataInternal: "
+                    "Error in Resource::readBackDataLinear: "
                     "The copy destination is larger than the source buffer.");
         }
     } else {
         rowSize = getRowSizeInBytes();
         srcRowPitch = getRowPitchInBytes();
-        intermediateSizeInBytes = srcRowPitch;
+        copySize = srcRowPitch;
         if (settings.resourceDesc.Height > 1) {
-            intermediateSizeInBytes *= settings.resourceDesc.Height;
+            copySize *= settings.resourceDesc.Height;
         }
         if (settings.resourceDesc.DepthOrArraySize > 1) {
-            intermediateSizeInBytes *= settings.resourceDesc.DepthOrArraySize;
+            copySize *= settings.resourceDesc.DepthOrArraySize;
         }
-        if (sizeInBytesData > rowSize * settings.resourceDesc.Height * settings.resourceDesc.DepthOrArraySize) {
+        if (size > rowSize * settings.resourceDesc.Height * settings.resourceDesc.DepthOrArraySize) {
             sgl::Logfile::get()->throwError(
-                    "Error in Resource::readBackDataInternal: "
+                    "Error in Resource::readBackDataLinear: "
                     "The copy destination is larger than the source texture.");
         }
     }
 
     auto* d3d12Device = device->getD3D12Device2();
     CD3DX12_HEAP_PROPERTIES heapPropertiesReadBack(D3D12_HEAP_TYPE_READBACK);
-    auto bufferDescReadBack = CD3DX12_RESOURCE_DESC::Buffer(intermediateSizeInBytes);
+    auto bufferDescReadBack = CD3DX12_RESOURCE_DESC::Buffer(copySize);
     ComPtr<ID3D12Resource> intermediateResource{};
     ThrowIfFailed(d3d12Device->CreateCommittedResource(
             &heapPropertiesReadBack,
@@ -846,7 +852,7 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
         auto* d3d12CommandList = cmdList->getD3D12GraphicsCommandListPtr();
         if (settings.resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
             d3d12CommandList->CopyBufferRegion(
-                    intermediateResource.Get(), 0, resource.Get(), 0, sizeInBytesData);
+                    intermediateResource.Get(), 0, resource.Get(), 0, size);
         } else {
             D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
             bufferFootprint.Footprint.Width = static_cast<UINT>(settings.resourceDesc.Width);
@@ -864,11 +870,11 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
     });
 
     uint8_t* intermediateDataPtr;
-    D3D12_RANGE readRange = { 0, sizeInBytesData };
+    D3D12_RANGE readRange = { 0, size };
     D3D12_RANGE writtenRange = { 0, 0 };
     if (FAILED(intermediateResource->Map(0, &readRange, reinterpret_cast<void**>(&intermediateDataPtr)))) {
         sgl::Logfile::get()->throwError(
-                "Error: Resource::readBackDataInternal: ID3D12Resource::Map failed.");
+                "Error: Resource::readBackDataLinear: ID3D12Resource::Map failed.");
     }
     D3D12_MEMCPY_DEST memcpyDest{};
     memcpyDest.pData = dataPtr;
@@ -876,9 +882,9 @@ void Resource::readBackDataLinear(size_t sizeInBytesData, void* dataPtr) {
     subresourceSrc.pData = intermediateDataPtr;
     if (settings.resourceDesc.Height <= 1 && settings.resourceDesc.DepthOrArraySize <= 1) {
         // 1D data (no pitches necessary).
-        memcpyDest.RowPitch = SIZE_T(sizeInBytesData);
+        memcpyDest.RowPitch = SIZE_T(size);
         memcpyDest.SlicePitch = memcpyDest.RowPitch;
-        subresourceSrc.RowPitch = LONG_PTR(sizeInBytesData);
+        subresourceSrc.RowPitch = LONG_PTR(size);
         subresourceSrc.SlicePitch = subresourceSrc.RowPitch;
     } else if (settings.resourceDesc.DepthOrArraySize <= 1) {
         // 2D data (no slice pitch necessary).
